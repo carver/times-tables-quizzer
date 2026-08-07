@@ -1,21 +1,26 @@
 :root {
   color-scheme: light dark;
   font-family: system-ui, sans-serif;
+  --accent: #2563eb;
 }
 
+html,
 body {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
+  height: 100%;
   margin: 0;
 }
 
 .quiz {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 1rem;
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* Zone 1: a compact, quiet header. */
+.quiz-header {
+  flex: 0 0 auto;
+  padding: 0.5rem 1rem;
   text-align: center;
 }
 
@@ -25,48 +30,115 @@ body {
   margin: 0;
 }
 
+/* Zone 2: the large center block - the Fact, with the typed answer
+   directly beneath it. Positioned so the feedback overlay can cover it
+   without shifting anything above or below. */
+.center {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0 1rem;
+  min-height: 0;
+}
+
 .prompt {
   font-size: 3rem;
   font-weight: bold;
   margin: 0;
-}
-
-#answer-form {
-  display: flex;
-  gap: 0.5rem;
-}
-
-#answer-input {
-  font-size: 1.5rem;
-  width: 6ch;
   text-align: center;
 }
 
-button {
-  font-size: 1.5rem;
-}
-
-.feedback {
-  font-size: 1.5rem;
-  min-height: 2rem;
+.typed-answer {
+  font-size: 2.5rem;
+  min-height: 1.2em;
   margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
 }
 
-.feedback[data-result="correct"] {
-  color: #16a34a;
-}
-
-.feedback[data-result="incorrect"] {
-  color: #dc2626;
-}
-
-.feedback[data-celebration="personal-best"] {
-  color: #d97706;
-  font-weight: bold;
-}
-
-.feedback[data-celebration="milestone"] {
-  color: #7c3aed;
-  font-weight: bold;
+/* The overlay renders on top of the center block instead of appearing
+   as its own line - a line that appears and disappears shifts
+   everything above it, and layout shift during fast answering causes
+   mis-taps. Used both for the Celebration after a correct Attempt and
+   for the brief "not quite" flash after a wrong one - never for
+   anything the Learner needs to keep reading, since it sits on top of
+   the prompt and typed answer beneath it. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   font-size: 1.75rem;
+  font-weight: bold;
+  background: color-mix(in srgb, Canvas 85%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
+
+.overlay[data-visible="true"] {
+  opacity: 1;
+}
+
+.overlay[data-celebration="personal-best"] {
+  color: #d97706;
+}
+
+.overlay[data-celebration="milestone"] {
+  color: #7c3aed;
+  font-size: 2rem;
+}
+
+/* Zone 3: the keypad, anchored to the bottom of the viewport and taking
+   roughly the bottom 45% - the thumb zone on a phone, which is the
+   layout this keypad is designed for. */
+.keypad {
+  flex: 0 0 45%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.key {
+  min-height: 64px;
+  font-size: 1.75rem;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+  background: Canvas;
+  color: CanvasText;
+}
+
+.key:active {
+  background: color-mix(in srgb, CanvasText 12%, Canvas);
+}
+
+/* Enter is visually heavier than the digit keys - it's the only way to
+   submit (no auto-submit on digit count), so it needs to read as the
+   deliberate, weighted action it is. */
+.key-enter {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  font-weight: 700;
+}
+
+.key-enter:active {
+  background: color-mix(in srgb, var(--accent) 80%, black);
+}
+
+.key-backspace {
+  font-weight: 600;
 }
