@@ -53,3 +53,8 @@ button {
 .feedback[data-result="incorrect"] {
   color: #dc2626;
 }
+
+.feedback[data-celebration="personal-best"] {
+  color: #d97706;
+  font-weight: bold;
+}

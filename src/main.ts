@@ -42,8 +42,14 @@ formEl.addEventListener("submit", (submitEvent) => {
   state = result.state;
   saveState(state);
 
-  feedbackEl.textContent = result.correct ? "Correct!" : "Not quite — try again!";
+  feedbackEl.textContent =
+    result.celebration === "personal-best"
+      ? "New personal best!"
+      : result.correct
+        ? "Correct!"
+        : "Not quite — try again!";
   feedbackEl.dataset.result = result.correct ? "correct" : "incorrect";
+  feedbackEl.dataset.celebration = result.celebration;
 
   inputEl.value = "";
   inputEl.focus();

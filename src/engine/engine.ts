@@ -61,13 +61,30 @@ const BOOST_ATTEMPTS = 5;
 // single Attempt dominate the average.
 const RECENCY_WEIGHT = 0.3;
 
+// Extra allowance (ms) added to a response-time comparison target for
+// each digit beyond the first, so multi-digit answers (e.g. "144") aren't
+// held to the same bar as single-digit ones (e.g. "6") purely because
+// they take longer to type, not longer to recall.
+const PER_DIGIT_ALLOWANCE_MS = 300;
+
+export function typingAllowanceMs(answer: number): number {
+  const digitCount = Math.abs(answer).toString().length;
+  return (digitCount - 1) * PER_DIGIT_ALLOWANCE_MS;
+}
+
+// The Fact's current Fluency, in ms: its stored average plus decay for
+// time elapsed since it was last practiced. This is "Fluency" as
+// CONTEXT.md defines it - the decay isn't a separate concept layered on
+// top, it's part of what "current Fluency" means. Used both as the base
+// for selection weight (before the boost multiplier) and as the personal
+// baseline for celebration (ticket #6) / the progression check (ticket #7).
+export function currentFluencyMs(record: FluencyRecord | undefined, now: number): number {
+  return record ? record.averageResponseMs + DECAY_MS_PER_DAY * ((now - record.lastAttemptAt) / MS_PER_DAY) : UNATTEMPTED_WEIGHT_MS;
+}
+
 export function computeWeight(fact: Fact, state: Pick<EngineState, "fluency" | "boosted">, now: number): number {
   const key = factKey(fact);
-  const record = state.fluency[key];
-
-  const baseWeight = record
-    ? record.averageResponseMs + DECAY_MS_PER_DAY * ((now - record.lastAttemptAt) / MS_PER_DAY)
-    : UNATTEMPTED_WEIGHT_MS;
+  const baseWeight = currentFluencyMs(state.fluency[key], now);
 
   const remainingBoost = state.boosted[key] ?? 0;
   return remainingBoost > 0 ? baseWeight * BOOST_WEIGHT_MULTIPLIER : baseWeight;
@@ -79,7 +96,7 @@ export type AttemptSubmitted = {
   responseTimeMs: number;
 };
 
-export type Celebration = "correctness-only" | "none";
+export type Celebration = "correctness-only" | "personal-best" | "none";
 
 export type SubmitAttemptResult = {
   state: EngineState;
@@ -131,9 +148,14 @@ export function submitAttempt(
 
   const boosted = decrementBoosts(state.boosted, key);
   const fluency = { ...state.fluency };
+  let celebration: Celebration = "none";
 
   if (correct) {
     const previous = fluency[key];
+    const baselineMs = currentFluencyMs(previous, now);
+    const beatsBaseline = previous !== undefined && event.responseTimeMs < baselineMs + typingAllowanceMs(event.answer);
+    celebration = beatsBaseline ? "personal-best" : "correctness-only";
+
     fluency[key] = {
       averageResponseMs: previous
         ? RECENCY_WEIGHT * event.responseTimeMs + (1 - RECENCY_WEIGHT) * previous.averageResponseMs
@@ -156,6 +178,6 @@ export function submitAttempt(
   return {
     state: { ...nextState, fact: pickFact(nextState, deps) },
     correct,
-    celebration: correct ? "correctness-only" : "none",
+    celebration,
   };
 }

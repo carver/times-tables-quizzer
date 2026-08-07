@@ -4,6 +4,7 @@ import {
   createInitialState,
   listFacts,
   submitAttempt,
+  typingAllowanceMs,
   UNATTEMPTED_WEIGHT_MS,
   type EngineState,
 } from "./engine";
@@ -31,6 +32,17 @@ describe("listFacts", () => {
 
     expect(facts).toHaveLength(25);
     expect(facts).toContainEqual({ a: 5, b: 5 });
+  });
+});
+
+describe("typingAllowanceMs", () => {
+  it("gives no allowance for a 1-digit answer", () => {
+    expect(typingAllowanceMs(6)).toBe(0);
+  });
+
+  it("gives more allowance for each extra digit", () => {
+    expect(typingAllowanceMs(56)).toBe(300);
+    expect(typingAllowanceMs(144)).toBe(600);
   });
 });
 
@@ -139,6 +151,67 @@ describe("submitAttempt", () => {
 
     expect(result.state.fluency["1x1"]).toBeUndefined();
     expect(result.state.boosted["1x1"]).toBeGreaterThan(0);
+  });
+
+  it("celebrates correctness-only, not personal-best, on a Fact's first-ever Attempt", () => {
+    const state = createInitialState({ size: 1 }, deps());
+
+    const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 100 }, deps());
+
+    expect(result.celebration).toBe("correctness-only");
+  });
+
+  it("celebrates personal-best when beating the Fluency baseline (plus typing allowance)", () => {
+    let state = createInitialState({ size: 1 }, deps());
+    state = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 1000 }, deps()).state;
+
+    const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 500 }, deps());
+
+    expect(result.celebration).toBe("personal-best");
+  });
+
+  it("celebrates correctness-only, not personal-best, when not beating the baseline", () => {
+    let state = createInitialState({ size: 1 }, deps());
+    state = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 1000 }, deps()).state;
+
+    const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 1500 }, deps());
+
+    expect(result.celebration).toBe("correctness-only");
+  });
+
+  it("compares against the decayed baseline, not the stale stored average", () => {
+    // Baseline set at t=0 with a 1000ms average. Two days later, decay has
+    // pushed the *current* Fluency to 1000 + 2*50 = 1100ms, so an identical
+    // 1000ms response is now a personal best - it wasn't one against the
+    // raw, undecayed average.
+    let state = createInitialState({ size: 1 }, deps({ now: () => 0 }));
+    state = submitAttempt(
+      state,
+      { type: "attemptSubmitted", answer: 1, responseTimeMs: 1000 },
+      deps({ now: () => 0 }),
+    ).state;
+
+    const result = submitAttempt(
+      state,
+      { type: "attemptSubmitted", answer: 1, responseTimeMs: 1000 },
+      deps({ now: () => 2 * DAY_MS }),
+    );
+
+    expect(result.celebration).toBe("personal-best");
+  });
+
+  it("applies the per-digit typing allowance to the personal-best comparison", () => {
+    // Fact { a: 7, b: 8 } => answer 56, a 2-digit answer => 300ms allowance.
+    // Pin the Fact after each step (range size 8 has many Facts, and
+    // weighted selection would otherwise move on to a different one).
+    const fact = { a: 7, b: 8 };
+    let state: EngineState = { ...createInitialState({ size: 8 }, deps()), fact };
+    state = { ...submitAttempt(state, { type: "attemptSubmitted", answer: 56, responseTimeMs: 1000 }, deps()).state, fact };
+
+    // 1250ms is slower than the 1000ms baseline, but within the 300ms allowance.
+    const result = submitAttempt(state, { type: "attemptSubmitted", answer: 56, responseTimeMs: 1250 }, deps());
+
+    expect(result.celebration).toBe("personal-best");
   });
 
   it("still counts a wrong Attempt as practice for decay purposes, without changing the average", () => {
