@@ -80,6 +80,15 @@ export type EngineState = {
   needsRedemption: Record<FactKey, boolean>;
   rangeHistory: RangeHistory;
   streak: StreakState;
+  // Count of distinct calendar days (dayKey) with at least one Attempt -
+  // ticket #12's statistics header ("days practiced and current Streak,
+  // and nothing else"). Deliberately separate from `streak`: a broken
+  // Streak resets streak.count to effectively restart counting
+  // consecutive days, but days practiced is a lifetime total that must
+  // never go down. Incremented in submitAttempt by comparing against
+  // streak.lastActivityDay (the pre-update value) rather than
+  // maintaining a second day-tracking mechanism.
+  practiceDayCount: number;
 };
 
 const MS_PER_DAY = 86_400_000;
@@ -322,6 +331,10 @@ export function createInitialState(range: ActiveRange, deps: Dependencies): Engi
     // to have a history at all, same as every later expansion.
     rangeHistory: { [range.size]: deps.now() },
     streak: NEW_STREAK,
+    // No Attempt has happened yet - the first submitAttempt call is what
+    // brings this to 1 (same "nothing counts until an Attempt actually
+    // happens" rule NEW_STREAK follows).
+    practiceDayCount: 0,
   };
   return { ...base, fact: pickFact(base, deps) };
 }
@@ -404,10 +417,29 @@ export function submitAttempt(
   const rangeHistory = expanded ? { ...state.rangeHistory, [activeRange.size]: now } : state.rangeHistory;
   if (expanded) celebrations.push(celebration("range-expansion"));
 
+  // Compared against the PRE-update streak (not the `streak` advanceStreak
+  // returns below) since lastActivityDay advances to `today` on every
+  // Attempt regardless of whether the Streak itself recovers - this is
+  // "first Attempt of a not-yet-seen calendar day," not "Streak credited
+  // today" (ticket #12's days-practiced count must keep climbing even on
+  // days that fail to recover a broken Streak).
+  const isNewPracticeDay = state.streak.lastActivityDay !== dayKey(now);
+  const practiceDayCount = state.practiceDayCount + (isNewPracticeDay ? 1 : 0);
+
   const { streak, hitMilestone } = advanceStreak(state.streak, now, deps.random());
   if (hitMilestone) celebrations.push(celebration("milestone"));
 
-  const nextState: EngineState = { ...state, activeRange, fluency, accuracy, boosted, needsRedemption, rangeHistory, streak };
+  const nextState: EngineState = {
+    ...state,
+    activeRange,
+    fluency,
+    accuracy,
+    boosted,
+    needsRedemption,
+    rangeHistory,
+    streak,
+    practiceDayCount,
+  };
 
   return {
     state: { ...nextState, fact: pickFact(nextState, deps) },

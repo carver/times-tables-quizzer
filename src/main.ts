@@ -1,12 +1,20 @@
 import "./style.css";
-import { createInitialState, MAX_ACTIVE_RANGE_SIZE, type Celebration, type CelebrationKind, type Dependencies } from "./engine/engine";
+import { createInitialState, MAX_ACTIVE_RANGE_SIZE, type Celebration, type CelebrationKind, type Dependencies, type Fact } from "./engine/engine";
 import { loadState, saveState, type AppState } from "./persistence";
 import { computeProgressMapStatus, type ProgressHighWaterMark, type ProgressReadout } from "./progressMap";
 import { decideLanding, hashForRoute, routeFromHash, type Route } from "./route";
 import { createInitialScreen, pressBackspace, pressDigit, pressEnter, type ScreenState } from "./screen";
+import { classifyAccuracyCell, classifySpeedCell, factTooltipText, type CellState } from "./stats";
 
 const INITIAL_ACTIVE_RANGE = { size: 5 };
 const deps: Dependencies = { random: Math.random, now: Date.now };
+
+// Shared "N day(s)" pluralization for the map, quiz, and stats headers'
+// Streak/Practiced readouts, so the four call sites can't drift from
+// each other on the singular case.
+function dayCount(n: number): string {
+  return `${n} day${n === 1 ? "" : "s"}`;
+}
 
 // How long the overlay stays up before fading on its own. Neither of
 // these gates progress - the Celebration overlay is purely cosmetic
@@ -94,8 +102,49 @@ getEl<HTMLDivElement>("app").innerHTML = `
   </main>
 
   <section class="screen stats-screen" id="screen-stats">
-    <p>Statistics are coming soon.</p>
-    <a href="#/map">Back to map</a>
+    <header class="stats-header">
+      <a class="map-link" id="stats-map-link" href="#/map" aria-label="Home">⌂</a>
+      <p class="stats-days" id="stats-days"></p>
+      <p class="streak" id="stats-streak"></p>
+    </header>
+
+    <div class="stats-body">
+      <section class="stats-section" aria-labelledby="accuracy-heading">
+        <h2 class="stats-heading" id="accuracy-heading">Accuracy</h2>
+        <ul class="stats-legend">
+          <li><span class="legend-swatch" data-acc="0"></span>&lt;50%</li>
+          <li><span class="legend-swatch" data-acc="1"></span>50–75%</li>
+          <li><span class="legend-swatch" data-acc="2"></span>75–90%</li>
+          <li><span class="legend-swatch" data-acc="3"></span>90–99%</li>
+          <li><span class="legend-swatch" data-acc="4"></span>100%</li>
+        </ul>
+        <div class="stats-grid-wrap">
+          <div class="stats-grid" id="accuracy-grid" role="group" aria-label="Accuracy grid, 12 by 12 Facts"></div>
+        </div>
+      </section>
+
+      <section class="stats-section" aria-labelledby="speed-heading">
+        <h2 class="stats-heading" id="speed-heading">Speed</h2>
+        <ul class="stats-legend">
+          <li><span class="legend-swatch" data-speed="0"></span>&gt;1.5×</li>
+          <li><span class="legend-swatch" data-speed="1"></span>1.0–1.5×</li>
+          <li><span class="legend-swatch" data-speed="2"></span>0.8–1.0×</li>
+          <li><span class="legend-swatch" data-speed="3"></span>0.6–0.8×</li>
+          <li><span class="legend-swatch" data-speed="4"></span>&lt;0.6×</li>
+        </ul>
+        <div class="stats-grid-wrap">
+          <div class="stats-grid" id="speed-grid" role="group" aria-label="Speed grid, 12 by 12 Facts"></div>
+        </div>
+      </section>
+
+      <ul class="stats-legend stats-legend--shared">
+        <li><span class="legend-swatch legend-swatch--empty"></span>Not tried yet</li>
+        <li><span class="legend-swatch legend-swatch--never-correct"></span>Wrong so far</li>
+        <li><span class="legend-swatch legend-swatch--provisional"></span>Still new</li>
+      </ul>
+    </div>
+
+    <div class="stats-tooltip" id="stats-tooltip" role="status" aria-live="polite" data-visible="false"></div>
   </section>
 `;
 
@@ -112,6 +161,11 @@ const overlayEl = getEl<HTMLParagraphElement>("overlay");
 const keypadEl = getEl<HTMLElement>("keypad");
 
 const statsScreenEl = getEl<HTMLElement>("screen-stats");
+const statsDaysEl = getEl<HTMLParagraphElement>("stats-days");
+const statsStreakEl = getEl<HTMLParagraphElement>("stats-streak");
+const accuracyGridEl = getEl<HTMLDivElement>("accuracy-grid");
+const speedGridEl = getEl<HTMLDivElement>("speed-grid");
+const statsTooltipEl = getEl<HTMLDivElement>("stats-tooltip");
 
 const loaded: AppState = loadState() ?? { engine: createInitialState(INITIAL_ACTIVE_RANGE, deps), lastMapShownDay: null };
 let quizState: ScreenState = createInitialScreen(loaded.engine, deps);
@@ -158,7 +212,7 @@ function progressReadoutText(readout: ProgressReadout): string {
 function renderMap() {
   const { engine } = quizState;
   const { count } = engine.streak;
-  mapStreakEl.textContent = `Streak: ${count} day${count === 1 ? "" : "s"}`;
+  mapStreakEl.textContent = `Streak: ${dayCount(count)}`;
 
   renderProgressGrid(engine.activeRange.size);
 
@@ -183,9 +237,104 @@ function renderMap() {
   }
 }
 
+// Ticket #12's statistics grids - a class name per off-ramp CellState
+// (ADR 0004), plus a shared "provisional" modifier for the dashed ring
+// so a 1-2-Attempt Fact still gets its real bucket color underneath.
+function statsCellClass(state: CellState): string {
+  switch (state.kind) {
+    case "locked":
+      return "stats-cell stats-cell--locked";
+    case "unattempted":
+      return "stats-cell stats-cell--unattempted";
+    case "neverCorrect":
+      return "stats-cell stats-cell--never-correct";
+    case "value":
+      return state.provisional ? "stats-cell stats-cell--provisional" : "stats-cell";
+  }
+}
+
+// Builds one 12x12 grid of cell buttons. `varPrefix` picks which ramp's
+// CSS custom properties (--acc-1..5 or --speed-1..5, style.css) a
+// "value" cell's bucket resolves to - the bucket→color mapping itself
+// lives entirely in CSS so light/dark mode swap for free (ADR 0004:
+// dark steps are their own validated set, not the light ramp flipped).
+function buildStatsGrid(container: HTMLDivElement, varPrefix: "acc" | "speed", classify: (fact: Fact) => CellState) {
+  const { engine } = quizState;
+  const now = deps.now();
+  container.innerHTML = "";
+
+  for (let a = 1; a <= MAX_ACTIVE_RANGE_SIZE; a++) {
+    for (let b = 1; b <= MAX_ACTIVE_RANGE_SIZE; b++) {
+      const fact: Fact = { a, b };
+      const state = classify(fact);
+
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = statsCellClass(state);
+      if (state.kind === "value") {
+        cell.style.backgroundColor = `var(--${varPrefix}-${state.bucket + 1})`;
+      }
+
+      // Per-Fact numbers live in the tap/hover tooltip, never in the cell
+      // itself (ADR 0004) - the same text also backs the accessible name,
+      // so a screen reader gets exactly what a sighted hover/tap gets.
+      const text = factTooltipText(fact, engine, now);
+      cell.setAttribute("aria-label", text);
+      cell.addEventListener("pointerenter", () => showStatsTooltip(cell, text));
+      cell.addEventListener("focus", () => showStatsTooltip(cell, text));
+      cell.addEventListener("click", () => showStatsTooltip(cell, text));
+      cell.addEventListener("pointerleave", hideStatsTooltip);
+      cell.addEventListener("blur", hideStatsTooltip);
+
+      container.appendChild(cell);
+    }
+  }
+}
+
+// Positions the shared tooltip near the cell that triggered it, flipping
+// below when there isn't room above and clamping horizontally so it
+// never runs off-screen. Wired to hover, tap, AND keyboard focus below,
+// so the same detail is reachable the same way regardless of input
+// device.
+function showStatsTooltip(cell: HTMLElement, text: string) {
+  statsTooltipEl.textContent = text;
+  statsTooltipEl.dataset.visible = "true";
+
+  const cellRect = cell.getBoundingClientRect();
+  const tipRect = statsTooltipEl.getBoundingClientRect();
+  const margin = 8;
+
+  let left = cellRect.left + cellRect.width / 2 - tipRect.width / 2;
+  left = Math.max(margin, Math.min(left, window.innerWidth - tipRect.width - margin));
+
+  let top = cellRect.top - tipRect.height - margin;
+  if (top < margin) top = cellRect.bottom + margin;
+
+  statsTooltipEl.style.left = `${left}px`;
+  statsTooltipEl.style.top = `${top}px`;
+}
+
+function hideStatsTooltip() {
+  statsTooltipEl.dataset.visible = "false";
+}
+
+function renderStats() {
+  const { engine } = quizState;
+
+  // Header is days practiced and current Streak ONLY (ticket #12) - no
+  // total-Attempts figure, no time-series chart.
+  const days = engine.practiceDayCount;
+  statsDaysEl.textContent = `Practiced: ${dayCount(days)}`;
+  const { count } = engine.streak;
+  statsStreakEl.textContent = `Streak: ${dayCount(count)}`;
+
+  buildStatsGrid(accuracyGridEl, "acc", (fact) => classifyAccuracyCell(fact, engine));
+  buildStatsGrid(speedGridEl, "speed", (fact) => classifySpeedCell(fact, engine, deps.now()));
+}
+
 function renderQuiz() {
   const { count } = quizState.engine.streak;
-  streakEl.textContent = `Streak: ${count} day${count === 1 ? "" : "s"}`;
+  streakEl.textContent = `Streak: ${dayCount(count)}`;
 
   if (quizState.mode === "correcting") {
     // The correct answer is shown outright - the Learner isn't being
@@ -320,9 +469,13 @@ function applyRoute(route: Route) {
   mapScreenEl.dataset.active = String(route === "map");
   quizScreenEl.dataset.active = String(route === "quiz");
   statsScreenEl.dataset.active = String(route === "stats");
+  // A tooltip anchored to a now-hidden cell would otherwise stay stuck
+  // on screen after navigating away.
+  hideStatsTooltip();
 
   if (route === "map") renderMap();
   if (route === "quiz") renderQuiz();
+  if (route === "stats") renderStats();
 }
 
 window.addEventListener("hashchange", () => applyRoute(routeFromHash(window.location.hash)));

@@ -9,7 +9,13 @@ const STORAGE_KEY = "times-tables-quizzer:state";
 // Progress map landing rule's only piece of state - alongside the
 // EngineState fields, so it rides the same save/migrate path instead of
 // a second, ad-hoc localStorage read.
-export const CURRENT_SAVE_VERSION = 2;
+// Version 3 (ticket #12) adds `practiceDayCount` - the statistics
+// header's "days practiced" figure. A save from before this version has
+// no way to know its true lifetime count, so it defaults to 0 same as a
+// brand-new save; the count undercounts once for whoever upgrades mid-
+// history, which is an acceptable one-time cost for a figure nothing
+// upstream of this ticket ever needed to track.
+export const CURRENT_SAVE_VERSION = 3;
 
 // What the rest of the app actually works with: the engine's state plus
 // the one piece of routing state (CONTEXT.md's Progress map landing
@@ -48,10 +54,11 @@ function hasCoreEngineShape(value: Record<string, unknown>): boolean {
 // Fills in defaults for fields that didn't exist when a save was
 // written, rather than discarding the whole save over a partial schema
 // mismatch. Sources of "missing fields" so far: saves written before
-// ticket #10 (no `accuracy`, `needsRedemption`, `rangeHistory`) and
-// saves written before ticket #11 (no `lastMapShownDay`) - but the
-// shape of this function - keep the core fields, default the new ones -
-// is what a future version bump extends rather than replaces.
+// ticket #10 (no `accuracy`, `needsRedemption`, `rangeHistory`), saves
+// written before ticket #11 (no `lastMapShownDay`), and saves written
+// before ticket #12 (no `practiceDayCount`) - but the shape of this
+// function - keep the core fields, default the new ones - is what a
+// future version bump extends rather than replaces.
 function migrate(value: Record<string, unknown>): PersistedState | null {
   if (!hasCoreEngineShape(value)) return null;
 
@@ -64,6 +71,9 @@ function migrate(value: Record<string, unknown>): PersistedState | null {
     accuracy: isRecord(value.accuracy) ? (value.accuracy as EngineState["accuracy"]) : {},
     needsRedemption: isRecord(value.needsRedemption) ? (value.needsRedemption as EngineState["needsRedemption"]) : {},
     rangeHistory: isRecord(value.rangeHistory) ? (value.rangeHistory as EngineState["rangeHistory"]) : {},
+    // Absent/malformed defaults to 0, same as a save that predates this
+    // field entirely (see CURRENT_SAVE_VERSION's version-3 comment above).
+    practiceDayCount: typeof value.practiceDayCount === "number" ? value.practiceDayCount : 0,
     // No prior save has ever shown the Progress map, so an absent/malformed
     // value defaults to "never" - the same as a save that predates this
     // field entirely.

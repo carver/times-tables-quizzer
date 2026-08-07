@@ -2,6 +2,61 @@
   color-scheme: light dark;
   font-family: system-ui, sans-serif;
   --accent: #2563eb;
+
+  /* Statistics screen (ticket #12 / ADR 0004): two single-hue ramps,
+     five steps each, darker = better - Accuracy on orange (--acc-1..5),
+     speed on blue (--speed-1..5). `color-scheme: light dark` above
+     leaves the actual surface up to the browser/OS, which the palette
+     validator can't check against - so the grids render on an explicit,
+     pinned surface (--stats-surface) instead, with these exact ramp
+     steps validated (dataviz skill's validate_palette.js --ordinal)
+     against that exact surface in both modes. Light values below; the
+     dark override further down is its own chosen-and-validated set, not
+     these values flipped. */
+  --stats-surface: #fcfcfb;
+  --stats-ring: rgba(11, 11, 11, 0.14);
+  --acc-1: #f89c7b;
+  --acc-2: #e4744a;
+  --acc-3: #c55121;
+  --acc-4: #9f3600;
+  --acc-5: #771f00;
+  --speed-1: #7ab0f9;
+  --speed-2: #5593e6;
+  --speed-3: #306ebe;
+  --speed-4: #044b97;
+  --speed-5: #00296c;
+  /* "Attempted, never once correct" (ADR 0004) - deliberately NOT part
+     of either ramp, and validated (all-pairs CVD + normal-vision ΔE)
+     against both ramps' weakest step so it never reads as "just another
+     bucket." Soft amber/gold rather than red: the ADR is explicit that
+     red-alarm should never appear on this screen. */
+  --amber: #b26f00;
+}
+
+/* Dark mode's ramps flip which end reads as "weak": a literal `darker
+   means better` on a dark surface would make the BEST cells nearly
+   invisible (near-black on near-black), so - per the dataviz skill's
+   sequential-ramp guidance - the weak end sits close to the dark
+   surface and the strong end is the brightest, most saturated step.
+   Each step here was independently chosen and run through
+   validate_palette.js --ordinal against --stats-surface below; it is
+   not the light ramp's five hexes inverted. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --stats-surface: #1a1a19;
+    --stats-ring: rgba(255, 255, 255, 0.16);
+    --acc-1: #8e350e;
+    --acc-2: #b74c20;
+    --acc-3: #dd673a;
+    --acc-4: #f5845a;
+    --acc-5: #ffa07c;
+    --speed-1: #215596;
+    --speed-2: #3674c5;
+    --speed-3: #4f93ec;
+    --speed-4: #68acff;
+    --speed-5: #8bc7ff;
+    --amber: #ab7900;
+  }
 }
 
 html,
@@ -278,10 +333,210 @@ body {
   color: CanvasText;
 }
 
+/* Statistics screen (ticket #12) - the pinned surface (--stats-surface,
+   defined above) is what the ramp/amber steps were actually validated
+   against, so it's set here rather than left to `color-scheme`'s
+   browser default. */
 .stats-screen {
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
+  background: var(--stats-surface);
+  color: CanvasText;
   text-align: center;
-  padding: 0 1rem;
+}
+
+.stats-header {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 0.5rem 1rem;
+}
+
+.stats-days {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Scrolls independently of the header so "Practiced: N days / Streak"
+   stays visible while the grids - the tallest content on the page -
+   scroll past it on a short viewport. */
+.stats-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 1rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.stats-section {
+  width: 100%;
+  max-width: 360px;
+}
+
+.stats-heading {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+}
+
+.stats-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.15rem 0.6rem;
+  margin: 0 0 0.6rem;
+  padding: 0;
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.stats-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.stats-legend--shared {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+
+.legend-swatch[data-acc="0"] {
+  background: var(--acc-1);
+}
+.legend-swatch[data-acc="1"] {
+  background: var(--acc-2);
+}
+.legend-swatch[data-acc="2"] {
+  background: var(--acc-3);
+}
+.legend-swatch[data-acc="3"] {
+  background: var(--acc-4);
+}
+.legend-swatch[data-acc="4"] {
+  background: var(--acc-5);
+}
+.legend-swatch[data-speed="0"] {
+  background: var(--speed-1);
+}
+.legend-swatch[data-speed="1"] {
+  background: var(--speed-2);
+}
+.legend-swatch[data-speed="2"] {
+  background: var(--speed-3);
+}
+.legend-swatch[data-speed="3"] {
+  background: var(--speed-4);
+}
+.legend-swatch[data-speed="4"] {
+  background: var(--speed-5);
+}
+.legend-swatch--empty {
+  background: var(--stats-surface);
+  border: 1px solid var(--stats-ring);
+}
+.legend-swatch--never-correct {
+  background: var(--amber);
+}
+.legend-swatch--provisional {
+  background: color-mix(in srgb, CanvasText 15%, var(--stats-surface));
+  border: 2px dashed color-mix(in srgb, CanvasText 55%, transparent);
+}
+
+/* Scrolls horizontally INSIDE its own container rather than the page,
+   if a narrow/zoomed viewport can't fit 12 cells at the minimum
+   comfortable tap-target size (interaction.md: hit target >= ~24px). */
+.stats-grid-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 24px);
+  grid-template-rows: repeat(12, 24px);
+  gap: 2px;
+  width: max-content;
+  margin: 0 auto;
+}
+
+.stats-cell {
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.stats-cell:hover,
+.stats-cell:focus-visible {
+  position: relative;
+  z-index: 2;
+  outline: 2px solid CanvasText;
+  outline-offset: 1px;
+  transform: scale(1.15);
+}
+
+/* Outside the Active range - always shown (ADR 0004: "seeing the
+   unconquered territory is motivating"), neutral and inert rather than
+   colored, since nothing has been or could yet be attempted there. */
+.stats-cell--locked {
+  background: color-mix(in srgb, CanvasText 6%, transparent);
+  cursor: default;
+}
+
+/* Never attempted: surface plus a hairline ring (ADR 0004) - distinct
+   from both a locked cell (no ring) and the ramp's own lightest step
+   (an actual fill color, however pale). */
+.stats-cell--unattempted {
+  background: var(--stats-surface);
+  border: 1px solid var(--stats-ring);
+}
+
+/* Attempted, never once correct - soft amber on BOTH grids (ADR 0004),
+   the page's most actionable signal, so it must never be reachable by
+   the ramp's own coloring logic. */
+.stats-cell--never-correct {
+  background: var(--amber);
+}
+
+/* 1-2 Attempts: a real ramp color (set inline, per-cell, in main.ts)
+   PLUS this dashed ring marking it provisional - box-sizing: border-box
+   above means the ring insets the fill rather than growing the cell. */
+.stats-cell--provisional {
+  border: 2px dashed color-mix(in srgb, CanvasText 55%, transparent);
+}
+
+.stats-tooltip {
+  position: fixed;
+  z-index: 10;
+  max-width: 220px;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, Canvas 92%, CanvasText 8%);
+  border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+  color: CanvasText;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease-out;
+}
+
+.stats-tooltip[data-visible="true"] {
+  opacity: 1;
 }

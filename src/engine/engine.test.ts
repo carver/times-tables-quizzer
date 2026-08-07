@@ -426,6 +426,7 @@ describe("submitAttempt", () => {
       needsRedemption: {},
       rangeHistory: { 2: 0 },
       streak: NEW_STREAK,
+      practiceDayCount: 0,
     };
     // total weight = 500 + 2500 + 500 + 500 = 4000; the slow Fact "1x2" occupies
     // the cumulative range [500, 3000) out of 4000.
@@ -453,6 +454,7 @@ describe("submitAttempt", () => {
       needsRedemption: {},
       rangeHistory: { 2: 0 },
       streak: NEW_STREAK,
+      practiceDayCount: 0,
     };
     // "1x2" is boosted 4x -> weight 2000; total weight = 500 + 2000 + 500 + 2500 = 5500.
     // "1x2" occupies the cumulative range [500, 2500) out of 5500.
@@ -708,6 +710,54 @@ describe("submitAttempt", () => {
         ]),
       );
       expect(result.celebrations).toHaveLength(3);
+    });
+  });
+
+  describe("practiceDayCount", () => {
+    it("counts the very first-ever Attempt as day 1", () => {
+      const state = createInitialState({ size: 1 }, deps({ now: () => day(0) }));
+
+      const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 }, deps({ now: () => day(0) }));
+
+      expect(result.state.practiceDayCount).toBe(1);
+    });
+
+    it("does not double-count a second Attempt the same calendar day", () => {
+      const first = submitAttempt(
+        createInitialState({ size: 1 }, deps({ now: () => day(0) })),
+        { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 },
+        deps({ now: () => day(0) }),
+      ).state;
+
+      const second = submitAttempt(
+        first,
+        { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 },
+        deps({ now: () => day(0) }),
+      );
+
+      expect(second.state.practiceDayCount).toBe(1);
+    });
+
+    it("counts a new calendar day even when the Streak fails to recover it", () => {
+      // A Streak broken several days ago with a low recovery chance -
+      // `random` always returns 1, guaranteeing the roll misses regardless
+      // of missedDays, so lastStreakDay never advances to today. Days
+      // practiced must still climb: it tracks practice, not Streak credit
+      // (CONTEXT.md's Streak is a different concept from "showed up").
+      const state: EngineState = {
+        ...createInitialState({ size: 1 }, deps({ now: () => day(0) })),
+        practiceDayCount: 3,
+        streak: { count: 2, lastStreakDay: "2026-01-01", lastActivityDay: "2026-01-01", missedDays: 0 },
+      };
+
+      const result = submitAttempt(
+        state,
+        { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 },
+        deps({ now: () => day(10), random: () => 1 }),
+      );
+
+      expect(result.state.streak.lastStreakDay).toBe("2026-01-01"); // recovery did NOT happen
+      expect(result.state.practiceDayCount).toBe(4); // but the day still counts as practiced
     });
   });
 });

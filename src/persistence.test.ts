@@ -40,6 +40,7 @@ const fullEngineState: EngineState = {
   needsRedemption: { "5x5": true },
   rangeHistory: { 5: 500 },
   streak: { ...NEW_STREAK, count: 2 },
+  practiceDayCount: 7,
 };
 
 const fullAppState: AppState = { engine: fullEngineState, lastMapShownDay: "2026-08-07" };
@@ -49,7 +50,7 @@ describe("saveState / loadState round trip", () => {
     expect(loadState()).toBeNull();
   });
 
-  it("loads back exactly what was saved, including the fields added by ticket #10 and #11's lastMapShownDay", () => {
+  it("loads back exactly what was saved, including the fields added by ticket #10, #11's lastMapShownDay, and #12's practiceDayCount", () => {
     saveState(fullAppState);
 
     expect(loadState()).toEqual(fullAppState);
@@ -91,6 +92,7 @@ describe("migration", () => {
         accuracy: {},
         needsRedemption: {},
         rangeHistory: {},
+        practiceDayCount: 0,
       },
       lastMapShownDay: null,
     });
@@ -119,7 +121,19 @@ describe("migration", () => {
 
     const loaded = loadState();
 
-    expect(loaded).toEqual({ engine: preTicket11Save, lastMapShownDay: null });
+    expect(loaded).toEqual({ engine: { ...preTicket11Save, practiceDayCount: 0 }, lastMapShownDay: null });
+  });
+
+  // Simulates a save written before ticket #12 - has lastMapShownDay but
+  // predates practiceDayCount entirely.
+  const preTicket12Save = { ...preTicket11Save, lastMapShownDay: "2026-08-01" };
+
+  it("defaults practiceDayCount to 0 for a save that predates it", () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(preTicket12Save));
+
+    const loaded = loadState();
+
+    expect(loaded?.engine.practiceDayCount).toBe(0);
   });
 
   it("discards a save missing core (pre-ticket-#10) fields rather than half-migrating it", () => {
