@@ -1,0 +1,55 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  margin: 0;
+}
+
+.quiz {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+}
+
+.prompt {
+  font-size: 3rem;
+  font-weight: bold;
+  margin: 0;
+}
+
+#answer-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+#answer-input {
+  font-size: 1.5rem;
+  width: 6ch;
+  text-align: center;
+}
+
+button {
+  font-size: 1.5rem;
+}
+
+.feedback {
+  font-size: 1.5rem;
+  min-height: 2rem;
+  margin: 0;
+}
+
+.feedback[data-result="correct"] {
+  color: #16a34a;
+}
+
+.feedback[data-result="incorrect"] {
+  color: #dc2626;
+}

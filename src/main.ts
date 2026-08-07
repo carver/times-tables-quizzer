@@ -1,0 +1,44 @@
+import "./style.css";
+import { createInitialState, submitAttempt, type EngineState } from "./engine/engine";
+
+function getEl<T extends HTMLElement>(id: string): T {
+  return document.querySelector<T>(`#${id}`)!;
+}
+
+getEl<HTMLDivElement>("app").innerHTML = `
+  <main class="quiz">
+    <p class="prompt" id="prompt"></p>
+    <form id="answer-form" autocomplete="off">
+      <input id="answer-input" type="number" inputmode="numeric" aria-label="Your answer" />
+      <button type="submit">Submit</button>
+    </form>
+    <p class="feedback" id="feedback" aria-live="polite"></p>
+  </main>
+`;
+
+const promptEl = getEl<HTMLParagraphElement>("prompt");
+const formEl = getEl<HTMLFormElement>("answer-form");
+const inputEl = getEl<HTMLInputElement>("answer-input");
+const feedbackEl = getEl<HTMLParagraphElement>("feedback");
+
+let state: EngineState = createInitialState({ a: 6, b: 7 });
+
+function render() {
+  promptEl.textContent = `${state.fact.a} × ${state.fact.b} = ?`;
+}
+
+formEl.addEventListener("submit", (submitEvent) => {
+  submitEvent.preventDefault();
+
+  const answer = Number(inputEl.value);
+  const result = submitAttempt(state, { type: "attemptSubmitted", answer });
+  state = result.state;
+
+  feedbackEl.textContent = result.correct ? "Correct!" : "Not quite — try again!";
+  feedbackEl.dataset.result = result.correct ? "correct" : "incorrect";
+
+  inputEl.value = "";
+  inputEl.focus();
+});
+
+render();
