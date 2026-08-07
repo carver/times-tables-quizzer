@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  advanceStreak,
   computeWeight,
   createInitialState,
   isMastered,
   listFacts,
+  NEW_STREAK,
   nextActiveRange,
   submitAttempt,
   TARGET_SPEED_MS,
@@ -17,6 +19,100 @@ const DAY_MS = 86_400_000;
 function deps(overrides: { random?: () => number; now?: () => number } = {}) {
   return { random: overrides.random ?? (() => 0), now: overrides.now ?? (() => 0) };
 }
+
+// Local-time construction, matching dayKey's use of local calendar-day
+// getters - this keeps the hardcoded "2026-01-01"-style assertions below
+// correct regardless of which timezone the test runs in.
+const DAY0 = new Date(2026, 0, 1).getTime();
+const day = (n: number) => DAY0 + n * DAY_MS;
+
+describe("advanceStreak", () => {
+  it("starts a Streak of 1 on the very first-ever Attempt, regardless of the roll", () => {
+    const { streak, hitMilestone } = advanceStreak(NEW_STREAK, day(0), 0.999);
+
+    expect(streak.count).toBe(1);
+    expect(streak.lastStreakDay).toBe("2026-01-01");
+    expect(hitMilestone).toBe(false);
+  });
+
+  it("does not re-roll or double-increment on a second Attempt the same day", () => {
+    const afterFirst = advanceStreak(NEW_STREAK, day(0), 0.5).streak;
+
+    const { streak } = advanceStreak(afterFirst, day(0), 0); // roll=0 would trivially succeed if it rolled at all
+
+    expect(streak.count).toBe(1);
+  });
+
+  it("auto-continues on the very next consecutive day, no roll needed in practice (p=1)", () => {
+    const afterDay0 = advanceStreak(NEW_STREAK, day(0), 0.5).streak;
+
+    const { streak } = advanceStreak(afterDay0, day(1), 0.999); // even a near-1 roll succeeds when missedDays=0
+
+    expect(streak.count).toBe(2);
+    expect(streak.lastStreakDay).toBe("2026-01-02");
+  });
+
+  it("rolls 1/(missed+1) odds after a gap, succeeding under the threshold", () => {
+    const afterDay0 = advanceStreak(NEW_STREAK, day(0), 0.5).streak;
+    // Jump straight to day 2 - day 1 had zero Attempts, so missedDays = 1, p = 1/2.
+
+    const { streak } = advanceStreak(afterDay0, day(2), 0.49);
+
+    expect(streak.count).toBe(2);
+    expect(streak.lastStreakDay).toBe("2026-01-03");
+    expect(streak.missedDays).toBe(0); // resets on recovery
+  });
+
+  it("fails the recovery roll at or above the threshold, leaving the count unchanged", () => {
+    const afterDay0 = advanceStreak(NEW_STREAK, day(0), 0.5).streak;
+
+    const { streak, hitMilestone } = advanceStreak(afterDay0, day(2), 0.51);
+
+    expect(streak.count).toBe(1);
+    expect(hitMilestone).toBe(false);
+  });
+
+  it("freezes missedDays while practicing without recovering, instead of letting it grow", () => {
+    const afterDay0 = advanceStreak(NEW_STREAK, day(0), 0.5).streak;
+    // Day 1 is missed (zero Attempts). Day 2: practice, fail to recover (missedDays=1, p=1/2).
+    const afterFailedDay2 = advanceStreak(afterDay0, day(2), 0.9).streak;
+    expect(afterFailedDay2.missedDays).toBe(1);
+
+    // Day 3: practice again, still fail - missedDays must still read 1 (p=1/2),
+    // NOT 2, even though a full day has passed with no success.
+    const afterFailedDay3 = advanceStreak(afterFailedDay2, day(3), 0.49);
+
+    expect(afterFailedDay3.streak.count).toBe(2); // 0.49 < 1/2, recovers
+  });
+
+  it("never caps retries - recovery is still possible after many practiced-but-failed days", () => {
+    let streak = advanceStreak(NEW_STREAK, day(0), 0.5).streak; // count=1, then day 1 missed
+    for (let d = 2; d <= 20; d++) {
+      streak = advanceStreak(streak, day(d), 0.9).streak; // always fail (p=1/2, 0.9 loses)
+    }
+    expect(streak.count).toBe(1);
+    expect(streak.missedDays).toBe(1); // still frozen at 1, not 19
+
+    const { streak: recovered } = advanceStreak(streak, day(21), 0.1); // 0.1 < 1/2
+
+    expect(recovered.count).toBe(2);
+  });
+
+  it("triggers a Milestone every 7th Streak count, and not otherwise", () => {
+    let streak = NEW_STREAK;
+    let lastHit = false;
+    for (let d = 0; d < 7; d++) {
+      const result = advanceStreak(streak, day(d), 0.5);
+      streak = result.streak;
+      lastHit = result.hitMilestone;
+    }
+    expect(streak.count).toBe(7);
+    expect(lastHit).toBe(true);
+
+    const { hitMilestone: eighth } = advanceStreak(streak, day(7), 0.5);
+    expect(eighth).toBe(false);
+  });
+});
 
 describe("listFacts", () => {
   it("enumerates every a x b combination within the range", () => {
@@ -310,6 +406,7 @@ describe("submitAttempt", () => {
         "2x2": { averageResponseMs: 500, lastAttemptAt: 0 },
       },
       boosted: {},
+      streak: NEW_STREAK,
     };
     // total weight = 500 + 2500 + 500 + 500 = 4000; the slow Fact "1x2" occupies
     // the cumulative range [500, 3000) out of 4000.
@@ -333,6 +430,7 @@ describe("submitAttempt", () => {
         "2x2": { averageResponseMs: 2500, lastAttemptAt: 0 }, // un-Mastered so the range doesn't expand
       },
       boosted: { "1x2": 3 },
+      streak: NEW_STREAK,
     };
     // "1x2" is boosted 4x -> weight 2000; total weight = 500 + 2000 + 500 + 2500 = 5500.
     // "1x2" occupies the cumulative range [500, 2500) out of 5500.
@@ -361,5 +459,22 @@ describe("submitAttempt", () => {
       deps({ random: () => 0.99 }),
     ).state.fact;
     expect(newlyUnlockedFact).toEqual({ a: 2, b: 2 });
+  });
+
+  it("lets a Milestone-completing Attempt override the celebration even when answered incorrectly", () => {
+    const state: EngineState = {
+      ...createInitialState({ size: 1 }, deps({ now: () => day(5) })),
+      streak: { count: 6, lastStreakDay: "2026-01-06", lastActivityDay: "2026-01-06", missedDays: 0 },
+    };
+
+    const result = submitAttempt(
+      state,
+      { type: "attemptSubmitted", answer: -1, responseTimeMs: 100 }, // wrong on purpose
+      deps({ now: () => day(6) }), // the very next consecutive day -> missedDays=0, p=1, guaranteed recovery
+    );
+
+    expect(result.correct).toBe(false);
+    expect(result.state.streak.count).toBe(7);
+    expect(result.celebration).toBe("milestone");
   });
 });

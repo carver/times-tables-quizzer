@@ -4,7 +4,7 @@ const STORAGE_KEY = "times-tables-quizzer:state";
 
 function isValidEngineState(value: unknown): value is EngineState {
   if (typeof value !== "object" || value === null) return false;
-  const { activeRange, fact, fluency, boosted } = value as Record<string, unknown>;
+  const { activeRange, fact, fluency, boosted, streak } = value as Record<string, unknown>;
 
   return (
     typeof activeRange === "object" &&
@@ -17,7 +17,10 @@ function isValidEngineState(value: unknown): value is EngineState {
     typeof fluency === "object" &&
     fluency !== null &&
     typeof boosted === "object" &&
-    boosted !== null
+    boosted !== null &&
+    typeof streak === "object" &&
+    streak !== null &&
+    typeof (streak as Record<string, unknown>).count === "number"
   );
 }
 

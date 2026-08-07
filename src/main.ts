@@ -11,6 +11,7 @@ function getEl<T extends HTMLElement>(id: string): T {
 
 getEl<HTMLDivElement>("app").innerHTML = `
   <main class="quiz">
+    <p class="streak" id="streak"></p>
     <p class="prompt" id="prompt"></p>
     <form id="answer-form" autocomplete="off">
       <input id="answer-input" type="number" inputmode="numeric" aria-label="Your answer" />
@@ -20,6 +21,7 @@ getEl<HTMLDivElement>("app").innerHTML = `
   </main>
 `;
 
+const streakEl = getEl<HTMLParagraphElement>("streak");
 const promptEl = getEl<HTMLParagraphElement>("prompt");
 const formEl = getEl<HTMLFormElement>("answer-form");
 const inputEl = getEl<HTMLInputElement>("answer-input");
@@ -29,6 +31,8 @@ let state: EngineState = loadState() ?? createInitialState(INITIAL_ACTIVE_RANGE,
 let factShownAt = deps.now();
 
 function render() {
+  const { count } = state.streak;
+  streakEl.textContent = `Streak: ${count} day${count === 1 ? "" : "s"}`;
   promptEl.textContent = `${state.fact.a} × ${state.fact.b} = ?`;
   factShownAt = deps.now();
 }
@@ -43,11 +47,13 @@ formEl.addEventListener("submit", (submitEvent) => {
   saveState(state);
 
   feedbackEl.textContent =
-    result.celebration === "personal-best"
-      ? "New personal best!"
-      : result.correct
-        ? "Correct!"
-        : "Not quite — try again!";
+    result.celebration === "milestone"
+      ? `${state.streak.count}-day streak!`
+      : result.celebration === "personal-best"
+        ? "New personal best!"
+        : result.correct
+          ? "Correct!"
+          : "Not quite — try again!";
   feedbackEl.dataset.result = result.correct ? "correct" : "incorrect";
   feedbackEl.dataset.celebration = result.celebration;
 

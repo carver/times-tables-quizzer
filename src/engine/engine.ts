@@ -28,11 +28,24 @@ export type FluencyRecord = {
   lastAttemptAt: number;
 };
 
+export type StreakState = {
+  count: number;
+  // The calendar day (see dayKey) the Streak count last incremented on,
+  // and the last day - possibly later, if practiced-but-not-recovered
+  // days followed - with at least one Attempt. null means "never".
+  lastStreakDay: string | null;
+  lastActivityDay: string | null;
+  // Frozen while lastActivityDay keeps advancing (practicing, even
+  // without recovering); only grows on days with zero Attempts.
+  missedDays: number;
+};
+
 export type EngineState = {
   activeRange: ActiveRange;
   fact: Fact;
   fluency: Record<FactKey, FluencyRecord>;
   boosted: Record<FactKey, number>;
+  streak: StreakState;
 };
 
 const MS_PER_DAY = 86_400_000;
@@ -116,13 +129,85 @@ export function nextActiveRange(state: Pick<EngineState, "activeRange" | "fluenc
   return state.activeRange;
 }
 
+// Every Streak count that's a multiple of this triggers a Milestone.
+export const MILESTONE_INTERVAL = 7;
+
+export type DayKey = string;
+
+// The Learner's local calendar day, not UTC - a "day" for Streak
+// purposes means the day as the Learner (a specific person in one place,
+// not a server) experiences it. Using UTC would let an evening practice
+// session get miscounted as the next day, or vice versa, depending on
+// the Learner's timezone offset.
+function dayKey(ms: number): DayKey {
+  const date = new Date(ms);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function daysBetween(laterDayKey: DayKey, earlierDayKey: DayKey): number {
+  const toLocalMidnight = (key: DayKey) => {
+    const [year, month, day] = key.split("-").map(Number);
+    return new Date(year, month - 1, day).getTime();
+  };
+  return Math.round((toLocalMidnight(laterDayKey) - toLocalMidnight(earlierDayKey)) / MS_PER_DAY);
+}
+
+export type AdvanceStreakResult = {
+  streak: StreakState;
+  hitMilestone: boolean;
+};
+
+// How many calendar days have had zero Attempts since `lastActivityDay`,
+// given a new day boundary has just been crossed. Days with any Attempt
+// (even one that failed to recover the Streak) never count, per the
+// freeze-while-practicing rule - only true zero-Attempt gaps do.
+function accrueMissedDays(streak: StreakState, today: DayKey): number {
+  if (streak.lastActivityDay === null || streak.lastActivityDay === today) {
+    return streak.missedDays;
+  }
+  return streak.missedDays + (daysBetween(today, streak.lastActivityDay) - 1);
+}
+
+// Runs on every Attempt (correct or not - Streak only cares about
+// practice happening, per CONTEXT.md). `roll` is a [0, 1) draw from the
+// injected random source, kept as an explicit parameter (rather than
+// pulled from Dependencies internally) so recovery odds are exercised
+// deterministically in tests without threading a whole Dependencies
+// object through this pure function.
+export function advanceStreak(streak: StreakState, now: number, roll: number): AdvanceStreakResult {
+  const today = dayKey(now);
+
+  if (streak.lastStreakDay === today) {
+    // Already credited today - no more rolls needed (ADR 0002: "Rolling
+    // stops once recovery succeeds, or after the first Attempt on an
+    // unbroken day").
+    return { streak, hitMilestone: false };
+  }
+
+  const missedDays = accrueMissedDays(streak, today);
+  const recovered = roll < 1 / (missedDays + 1);
+
+  if (recovered) {
+    const count = streak.count + 1;
+    return {
+      streak: { count, lastStreakDay: today, lastActivityDay: today, missedDays: 0 },
+      hitMilestone: count % MILESTONE_INTERVAL === 0,
+    };
+  }
+
+  return { streak: { ...streak, lastActivityDay: today, missedDays }, hitMilestone: false };
+}
+
 export type AttemptSubmitted = {
   type: "attemptSubmitted";
   answer: number;
   responseTimeMs: number;
 };
 
-export type Celebration = "correctness-only" | "personal-best" | "none";
+export type Celebration = "correctness-only" | "personal-best" | "milestone" | "none";
 
 export type SubmitAttemptResult = {
   state: EngineState;
@@ -149,8 +234,10 @@ function pickFact(state: Pick<EngineState, "activeRange" | "fluency" | "boosted"
   return facts[facts.length - 1];
 }
 
+export const NEW_STREAK: StreakState = { count: 0, lastStreakDay: null, lastActivityDay: null, missedDays: 0 };
+
 export function createInitialState(range: ActiveRange, deps: Dependencies): EngineState {
-  const base = { activeRange: range, fluency: {}, boosted: {} };
+  const base = { activeRange: range, fluency: {}, boosted: {}, streak: NEW_STREAK };
   return { ...base, fact: pickFact(base, deps) };
 }
 
@@ -200,7 +287,10 @@ export function submitAttempt(
   }
 
   const activeRange = nextActiveRange({ activeRange: state.activeRange, fluency }, now);
-  const nextState: EngineState = { ...state, activeRange, fluency, boosted };
+  const { streak, hitMilestone } = advanceStreak(state.streak, now, deps.random());
+  if (hitMilestone) celebration = "milestone";
+
+  const nextState: EngineState = { ...state, activeRange, fluency, boosted, streak };
 
   return {
     state: { ...nextState, fact: pickFact(nextState, deps) },

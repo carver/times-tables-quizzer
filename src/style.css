@@ -19,6 +19,12 @@ body {
   text-align: center;
 }
 
+.streak {
+  font-size: 1rem;
+  opacity: 0.7;
+  margin: 0;
+}
+
 .prompt {
   font-size: 3rem;
   font-weight: bold;
@@ -57,4 +63,10 @@ button {
 .feedback[data-celebration="personal-best"] {
   color: #d97706;
   font-weight: bold;
+}
+
+.feedback[data-celebration="milestone"] {
+  color: #7c3aed;
+  font-weight: bold;
+  font-size: 1.75rem;
 }
