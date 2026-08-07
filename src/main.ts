@@ -1,5 +1,5 @@
 import "./style.css";
-import { createInitialState, type Dependencies } from "./engine/engine";
+import { createInitialState, type Celebration, type CelebrationKind, type Dependencies } from "./engine/engine";
 import { loadState, saveState } from "./persistence";
 import { createInitialScreen, pressBackspace, pressDigit, pressEnter, type ScreenState } from "./screen";
 
@@ -14,6 +14,35 @@ const deps: Dependencies = { random: Math.random, now: Date.now };
 // mode, underneath, for as long as the retype takes.
 const CELEBRATION_DISPLAY_MS = 1200;
 const WRONG_ANSWER_FLASH_MS = 900;
+
+// An Attempt can produce several Celebrations at once (ticket #10); this
+// picks the single most-significant one to headline the overlay text
+// with. Takeover-tagged kinds (rarer, bigger moments) always outrank
+// inline ones. The actual takeover screen - filling the display and
+// waiting for a dismissal, rather than this auto-fading overlay - is
+// ticket #13's job; this is a minimal, coherent stand-in until then.
+const CELEBRATION_PRIORITY: CelebrationKind[] = ["range-expansion", "milestone", "personal-best", "correctness-only"];
+
+function primaryCelebration(celebrations: Celebration[]): Celebration | undefined {
+  for (const kind of CELEBRATION_PRIORITY) {
+    const found = celebrations.find((c) => c.kind === kind);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function celebrationText(celebration: Celebration, streakCount: number): string {
+  switch (celebration.kind) {
+    case "range-expansion":
+      return "You unlocked a bigger range!";
+    case "milestone":
+      return `${streakCount}-day streak!`;
+    case "personal-best":
+      return "New personal best!";
+    case "correctness-only":
+      return "Correct!";
+  }
+}
 
 function getEl<T extends HTMLElement>(id: string): T {
   return document.querySelector<T>(`#${id}`)!;
@@ -101,6 +130,26 @@ function handleBackspace() {
   render();
 }
 
+// Shows the most-significant Celebration from the set, if any; used by
+// both the "correct" and "incorrect" outcomes below since a wrong
+// Attempt can still carry one (e.g. a Milestone - Streak advances on
+// every Attempt regardless of correctness). Returns whether it showed
+// one, so callers can fall back to their own default overlay when not.
+function showPrimaryCelebration(celebrations: Celebration[], streakCount: number): boolean {
+  const primary = primaryCelebration(celebrations);
+  if (!primary) return false;
+
+  showOverlay(
+    celebrationText(primary, streakCount),
+    primary.kind,
+    // Inline celebrations auto-fade quickly so they never block the next
+    // Attempt; takeover ones stay up until the next overlay call replaces
+    // them (a placeholder for #13's real dismiss flow).
+    primary.tag === "inline" ? CELEBRATION_DISPLAY_MS : undefined,
+  );
+  return true;
+}
+
 function handleEnter() {
   const { screen: next, outcome } = pressEnter(screen, deps);
   screen = next;
@@ -110,24 +159,18 @@ function handleEnter() {
       return;
     case "correct":
       saveState(screen.engine);
-      showOverlay(
-        outcome.celebration === "milestone"
-          ? `${screen.engine.streak.count}-day streak!`
-          : outcome.celebration === "personal-best"
-            ? "New personal best!"
-            : "Correct!",
-        outcome.celebration,
-        CELEBRATION_DISPLAY_MS,
-      );
+      showPrimaryCelebration(outcome.celebrations, screen.engine.streak.count);
       break;
     case "incorrect":
       saveState(screen.engine);
-      // A brief flash, not a persistent cover: the correct answer itself
-      // is shown by render() in the prompt for the whole "correcting"
-      // mode, so the overlay must not sit on top of it for the duration
-      // of the retype - that would hide the very thing the Learner is
-      // meant to read and copy.
-      showOverlay("Not quite — type the answer to continue", "none", WRONG_ANSWER_FLASH_MS);
+      if (!showPrimaryCelebration(outcome.celebrations, screen.engine.streak.count)) {
+        // A brief flash, not a persistent cover: the correct answer itself
+        // is shown by render() in the prompt for the whole "correcting"
+        // mode, so the overlay must not sit on top of it for the duration
+        // of the retype - that would hide the very thing the Learner is
+        // meant to read and copy.
+        showOverlay("Not quite — type the answer to continue", "none", WRONG_ANSWER_FLASH_MS);
+      }
       break;
     case "correction-dismissed":
       hideOverlay();

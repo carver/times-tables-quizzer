@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { createInitialState, type EngineState } from "./engine/engine";
+import { createInitialState, dayKey, type EngineState } from "./engine/engine";
 import { createInitialScreen, pressBackspace, pressDigit, pressEnter, type CorrectingScreen } from "./screen";
 
 function deps(overrides: { random?: () => number; now?: () => number } = {}) {
   return { random: overrides.random ?? (() => 0), now: overrides.now ?? (() => 0) };
 }
+
+// Matches engine.test.ts's DAY_MS/day helpers - needed here only for the
+// one test that has to land a Streak Milestone on a specific calendar
+// day (dayKey itself is the engine's, imported above, not reimplemented).
+const DAY_MS = 86_400_000;
+const DAY0 = new Date(2026, 0, 1).getTime();
+const day = (n: number) => DAY0 + n * DAY_MS;
 
 // Fact { a: 1, b: 1 } every time (range size 1), so tests can hardcode the
 // correct answer without depending on weighted selection.
@@ -75,12 +82,16 @@ describe("pressEnter", () => {
   });
 
   it("submits the typed answer as an Attempt, advances to the next Fact, and resets the timer on a correct answer", () => {
-    const engine = engineWithSingleFact({ now: () => 0 });
+    // size 2 (not 1, unlike engineWithSingleFact) so this single Attempt
+    // doesn't also Master 100% of the range and pull in an incidental
+    // range-expansion celebration - random: () => 0 still deterministically
+    // picks { a: 1, b: 1 } first, so the hardcoded "1" answer still applies.
+    const engine = createInitialState({ size: 2 }, deps({ now: () => 0 }));
     const screen = { ...createInitialScreen(engine, deps({ now: () => 0 })), typed: "1" };
 
     const { screen: next, outcome } = pressEnter(screen, deps({ now: () => 900 }));
 
-    expect(outcome).toEqual({ kind: "correct", celebration: "correctness-only" });
+    expect(outcome).toEqual({ kind: "correct", celebrations: [{ kind: "correctness-only", tag: "inline" }] });
     expect(next.mode).toBe("answering");
     expect(next.typed).toBe("");
     expect((next as { factShownAt: number }).factShownAt).toBe(900);
@@ -95,9 +106,24 @@ describe("pressEnter", () => {
 
     const { screen: next, outcome } = pressEnter(screen, deps({ now: () => 500 }));
 
-    expect(outcome).toEqual({ kind: "incorrect" });
+    expect(outcome).toEqual({ kind: "incorrect", celebrations: [] });
     expect(next.mode).toBe("correcting");
     expect(next.engine.fluency["1x1"]).toBeUndefined();
+  });
+
+  it("surfaces a Milestone celebration on the incorrect outcome when the wrong Attempt still completes it", () => {
+    // Streak count 6, guaranteed recovery on the very next consecutive
+    // day (missedDays=0) - the 7th day is a Milestone regardless of
+    // whether this Attempt itself was answered correctly.
+    const engine: EngineState = {
+      ...engineWithSingleFact({ now: () => day(5) }),
+      streak: { count: 6, lastStreakDay: dayKey(day(5)), lastActivityDay: dayKey(day(5)), missedDays: 0 },
+    };
+    const screen = { ...createInitialScreen(engine, deps({ now: () => day(5) })), typed: "99" };
+
+    const { outcome } = pressEnter(screen, deps({ now: () => day(6) }));
+
+    expect(outcome).toEqual({ kind: "incorrect", celebrations: [{ kind: "milestone", tag: "takeover" }] });
   });
 
   it("enters correcting mode holding the wrong Fact and its correct answer, not the engine's newly-picked next Fact", () => {

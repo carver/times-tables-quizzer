@@ -28,6 +28,23 @@ export type FluencyRecord = {
   lastAttemptAt: number;
 };
 
+// A per-Fact, recency-weighted share of correct Attempts (CONTEXT.md).
+// Unlike FluencyRecord this deliberately carries no "lastAttemptAt" /
+// decay input - Accuracy does not decay with time, so there is nothing
+// for a decay function to read. It is display-only: nothing in this
+// module may consult it when computing selection weight or the
+// progression threshold.
+export type AccuracyRecord = {
+  // EMA of correctness (1 for a correct Attempt, 0 for wrong), blended
+  // with RECENCY_WEIGHT - the same weighting Fluency uses, so there's one
+  // mental model for "recency-weighted" rather than two.
+  correctShare: number;
+  // Lifetime Attempt count for this Fact (correct or not). This is what
+  // lets the UI (ticket #12's statistics grids) distinguish "provisional,
+  // only 1-2 Attempts" from a trustworthy Accuracy figure.
+  attemptCount: number;
+};
+
 export type StreakState = {
   count: number;
   // The calendar day (see dayKey) the Streak count last incremented on,
@@ -40,11 +57,28 @@ export type StreakState = {
   missedDays: number;
 };
 
+// Timestamps (ms) marking when each Active range size was first reached,
+// keyed by `size`. Populated once at creation for the starting size, and
+// again on every expansion in submitAttempt. Cheap to capture now,
+// unrecoverable later if we don't (ticket #10).
+export type RangeHistory = Record<number, number>;
+
 export type EngineState = {
   activeRange: ActiveRange;
   fact: Fact;
   fluency: Record<FactKey, FluencyRecord>;
+  accuracy: Record<FactKey, AccuracyRecord>;
   boosted: Record<FactKey, number>;
+  // ADR 0003: true while a Fact has been answered wrong more recently
+  // than it's been answered right, blocking it from counting as Mastered
+  // until redeemed. Deliberately separate from `boosted` - boosts expire
+  // after BOOST_ATTEMPTS Attempts across *any* Fact, which would let a
+  // wrong Fact quietly re-qualify as Mastered without ever being
+  // redrawn (see ADR 0003). Absent/false means no redemption owed;
+  // cleared by the Fact's next correct Attempt, never by elapsed time or
+  // other Facts' Attempts.
+  needsRedemption: Record<FactKey, boolean>;
+  rangeHistory: RangeHistory;
   streak: StreakState;
 };
 
@@ -113,12 +147,21 @@ export const MASTERY_THRESHOLD = 0.9;
 // The full 1-12 x 1-12 grid is the largest Active range; progression stops there.
 export const MAX_ACTIVE_RANGE_SIZE = 12;
 
-export function isMastered(fact: Fact, state: Pick<EngineState, "fluency">, now: number): boolean {
+// ADR 0003: Mastered requires both the speed bar (ADR 0001, unchanged)
+// and redemption - a Fact the Learner has just gotten wrong doesn't
+// count, however fast its stored Fluency looks, until it's been answered
+// correctly again.
+export function isMastered(fact: Fact, state: Pick<EngineState, "fluency" | "needsRedemption">, now: number): boolean {
+  if (state.needsRedemption[factKey(fact)]) return false;
+
   const target = TARGET_SPEED_MS + typingAllowanceMs(fact.a * fact.b);
   return currentFluencyMs(state.fluency[factKey(fact)], now) < target;
 }
 
-export function nextActiveRange(state: Pick<EngineState, "activeRange" | "fluency">, now: number): ActiveRange {
+export function nextActiveRange(
+  state: Pick<EngineState, "activeRange" | "fluency" | "needsRedemption">,
+  now: number,
+): ActiveRange {
   const facts = listFacts(state.activeRange);
   const masteredCount = facts.filter((fact) => isMastered(fact, state, now)).length;
   const isRangeMastered = masteredCount / facts.length >= MASTERY_THRESHOLD;
@@ -139,7 +182,7 @@ export type DayKey = string;
 // not a server) experiences it. Using UTC would let an evening practice
 // session get miscounted as the next day, or vice versa, depending on
 // the Learner's timezone offset.
-function dayKey(ms: number): DayKey {
+export function dayKey(ms: number): DayKey {
   const date = new Date(ms);
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -207,12 +250,44 @@ export type AttemptSubmitted = {
   responseTimeMs: number;
 };
 
-export type Celebration = "correctness-only" | "personal-best" | "milestone" | "none";
+export type CelebrationKind = "correctness-only" | "personal-best" | "milestone" | "range-expansion";
 
+// CONTEXT.md's Celebration entry: inline plays over the practice screen
+// without interrupting; takeover fills the screen and waits to be
+// dismissed. The tag is a fixed property of the kind (not a per-Attempt
+// choice) - see CELEBRATION_TAGS.
+export type CelebrationTag = "inline" | "takeover";
+
+export type Celebration = {
+  kind: CelebrationKind;
+  tag: CelebrationTag;
+};
+
+// milestone and range-expansion mark rare, weeks-in-the-making moments
+// and get the interrupting takeover treatment; correctness-only and
+// personal-best happen constantly during normal play and stay inline so
+// they never block the next Attempt.
+const CELEBRATION_TAGS: Record<CelebrationKind, CelebrationTag> = {
+  "correctness-only": "inline",
+  "personal-best": "inline",
+  milestone: "takeover",
+  "range-expansion": "takeover",
+};
+
+function celebration(kind: CelebrationKind): Celebration {
+  return { kind, tag: CELEBRATION_TAGS[kind] };
+}
+
+// A single Attempt can plausibly be a personal best, expand the Active
+// range, AND hit a Milestone simultaneously - the best moment the app
+// will ever produce. `celebrations` is a set (as an array; each kind can
+// appear at most once per Attempt) so none of those get silently
+// dropped in favor of another, the way `milestone` used to overwrite
+// `personal-best` before this ticket.
 export type SubmitAttemptResult = {
   state: EngineState;
   correct: boolean;
-  celebration: Celebration;
+  celebrations: Celebration[];
 };
 
 export type Dependencies = {
@@ -237,7 +312,17 @@ function pickFact(state: Pick<EngineState, "activeRange" | "fluency" | "boosted"
 export const NEW_STREAK: StreakState = { count: 0, lastStreakDay: null, lastActivityDay: null, missedDays: 0 };
 
 export function createInitialState(range: ActiveRange, deps: Dependencies): EngineState {
-  const base = { activeRange: range, fluency: {}, boosted: {}, streak: NEW_STREAK };
+  const base = {
+    activeRange: range,
+    fluency: {},
+    accuracy: {},
+    boosted: {},
+    needsRedemption: {},
+    // The starting size counts as "reached" the moment there's a state
+    // to have a history at all, same as every later expansion.
+    rangeHistory: { [range.size]: deps.now() },
+    streak: NEW_STREAK,
+  };
   return { ...base, fact: pickFact(base, deps) };
 }
 
@@ -247,6 +332,24 @@ function decrementBoosts(boosted: Record<FactKey, number>, exceptKey: FactKey): 
     if (key === exceptKey) continue;
     if (remaining > 1) next[key] = remaining - 1;
   }
+  return next;
+}
+
+// EMA-blends Accuracy the same way Fluency blends response times
+// (RECENCY_WEIGHT), but over correctness (1/0) instead of milliseconds,
+// and with no decay term - Accuracy does not fade with elapsed time.
+function updateAccuracy(previous: AccuracyRecord | undefined, correct: boolean): AccuracyRecord {
+  const observation = correct ? 1 : 0;
+  return {
+    correctShare: previous ? RECENCY_WEIGHT * observation + (1 - RECENCY_WEIGHT) * previous.correctShare : observation,
+    attemptCount: (previous?.attemptCount ?? 0) + 1,
+  };
+}
+
+function clearRedemption(needsRedemption: Record<FactKey, boolean>, key: FactKey): Record<FactKey, boolean> {
+  if (!needsRedemption[key]) return needsRedemption;
+  const next = { ...needsRedemption };
+  delete next[key];
   return next;
 }
 
@@ -261,13 +364,15 @@ export function submitAttempt(
 
   const boosted = decrementBoosts(state.boosted, key);
   const fluency = { ...state.fluency };
-  let celebration: Celebration = "none";
+  const accuracy = { ...state.accuracy, [key]: updateAccuracy(state.accuracy[key], correct) };
+  let needsRedemption = state.needsRedemption;
+  const celebrations: Celebration[] = [];
 
   if (correct) {
     const previous = fluency[key];
     const baselineMs = currentFluencyMs(previous, now);
     const beatsBaseline = previous !== undefined && event.responseTimeMs < baselineMs + typingAllowanceMs(event.answer);
-    celebration = beatsBaseline ? "personal-best" : "correctness-only";
+    celebrations.push(celebration(beatsBaseline ? "personal-best" : "correctness-only"));
 
     fluency[key] = {
       averageResponseMs: previous
@@ -275,8 +380,16 @@ export function submitAttempt(
         : event.responseTimeMs,
       lastAttemptAt: now,
     };
+
+    // ADR 0003: this Fact has now been answered correctly since its most
+    // recent wrong Attempt (if any), so it no longer owes redemption.
+    needsRedemption = clearRedemption(state.needsRedemption, key);
   } else {
     boosted[key] = BOOST_ATTEMPTS;
+    // ADR 0003: blocks this Fact from counting as Mastered until it's
+    // answered correctly again - independent of `boosted`, which expires
+    // on a fixed Attempt count instead of on evidence.
+    needsRedemption = { ...state.needsRedemption, [key]: true };
     // A wrong Attempt doesn't change the average (CONTEXT.md: "a wrong
     // Attempt doesn't feed Fluency"), but it's still practice - so the
     // decay clock, which tracks time since last *practiced* rather than
@@ -286,15 +399,19 @@ export function submitAttempt(
     }
   }
 
-  const activeRange = nextActiveRange({ activeRange: state.activeRange, fluency }, now);
-  const { streak, hitMilestone } = advanceStreak(state.streak, now, deps.random());
-  if (hitMilestone) celebration = "milestone";
+  const activeRange = nextActiveRange({ activeRange: state.activeRange, fluency, needsRedemption }, now);
+  const expanded = activeRange.size !== state.activeRange.size;
+  const rangeHistory = expanded ? { ...state.rangeHistory, [activeRange.size]: now } : state.rangeHistory;
+  if (expanded) celebrations.push(celebration("range-expansion"));
 
-  const nextState: EngineState = { ...state, activeRange, fluency, boosted, streak };
+  const { streak, hitMilestone } = advanceStreak(state.streak, now, deps.random());
+  if (hitMilestone) celebrations.push(celebration("milestone"));
+
+  const nextState: EngineState = { ...state, activeRange, fluency, accuracy, boosted, needsRedemption, rangeHistory, streak };
 
   return {
     state: { ...nextState, fact: pickFact(nextState, deps) },
     correct,
-    celebration,
+    celebrations,
   };
 }

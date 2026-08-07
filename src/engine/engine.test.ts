@@ -148,25 +148,35 @@ describe("typingAllowanceMs", () => {
 describe("isMastered", () => {
   it("is not Mastered when never attempted", () => {
     const fact = { a: 3, b: 4 };
-    expect(isMastered(fact, { fluency: {} }, 0)).toBe(false);
+    expect(isMastered(fact, { fluency: {}, needsRedemption: {} }, 0)).toBe(false);
   });
 
   it("is Mastered when current Fluency is under the target speed", () => {
     const fact = { a: 1, b: 1 }; // 1-digit product, no typing allowance
-    const state = { fluency: { "1x1": { averageResponseMs: TARGET_SPEED_MS - 1, lastAttemptAt: 0 } } };
+    const state = { fluency: { "1x1": { averageResponseMs: TARGET_SPEED_MS - 1, lastAttemptAt: 0 } }, needsRedemption: {} };
     expect(isMastered(fact, state, 0)).toBe(true);
   });
 
   it("is not Mastered when current Fluency is at or over the target speed", () => {
     const fact = { a: 1, b: 1 };
-    const state = { fluency: { "1x1": { averageResponseMs: TARGET_SPEED_MS, lastAttemptAt: 0 } } };
+    const state = { fluency: { "1x1": { averageResponseMs: TARGET_SPEED_MS, lastAttemptAt: 0 } }, needsRedemption: {} };
     expect(isMastered(fact, state, 0)).toBe(false);
   });
 
   it("applies the per-digit typing allowance to the target for multi-digit products", () => {
     const fact = { a: 7, b: 8 }; // product 56, 2 digits => +300ms allowance
-    const state = { fluency: { "7x8": { averageResponseMs: TARGET_SPEED_MS + 200, lastAttemptAt: 0 } } };
+    const state = { fluency: { "7x8": { averageResponseMs: TARGET_SPEED_MS + 200, lastAttemptAt: 0 } }, needsRedemption: {} };
     expect(isMastered(fact, state, 0)).toBe(true);
+  });
+
+  // ADR 0003
+  it("is not Mastered when it needs redemption, even with Fluency well under the target speed", () => {
+    const fact = { a: 1, b: 1 };
+    const state = {
+      fluency: { "1x1": { averageResponseMs: TARGET_SPEED_MS - 1, lastAttemptAt: 0 } },
+      needsRedemption: { "1x1": true },
+    };
+    expect(isMastered(fact, state, 0)).toBe(false);
   });
 });
 
@@ -180,7 +190,7 @@ describe("nextActiveRange", () => {
         lastAttemptAt: 0,
       };
     });
-    return { activeRange: range, fluency };
+    return { activeRange: range, fluency, needsRedemption: {} };
   }
 
   it("does not expand when fewer than 90% of the range is Mastered", () => {
@@ -199,6 +209,14 @@ describe("nextActiveRange", () => {
     const state = stateWithMasteredCount({ size: 12 }, 144); // 100% Mastered
 
     expect(nextActiveRange(state, 0)).toEqual({ size: 12 });
+  });
+
+  // ADR 0003
+  it("does not count a Fact that needs redemption toward the Mastered threshold, even if fast", () => {
+    const fast = stateWithMasteredCount({ size: 5 }, 23); // 23/25 = 92%, would expand on speed alone
+    const state = { ...fast, needsRedemption: { "1x1": true } }; // one of the "fast" Facts owes redemption
+
+    expect(nextActiveRange(state, 0)).toEqual({ size: 5 });
   });
 });
 
@@ -244,6 +262,12 @@ describe("createInitialState", () => {
 
     expect(state.fact).toEqual({ a: 2, b: 2 });
   });
+
+  it("seeds Range history with the starting size reached at creation time", () => {
+    const state = createInitialState({ size: 5 }, deps({ now: () => 12_345 }));
+
+    expect(state.rangeHistory).toEqual({ 5: 12_345 });
+  });
 });
 
 describe("submitAttempt", () => {
@@ -253,7 +277,7 @@ describe("submitAttempt", () => {
     const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 }, deps());
 
     expect(result.correct).toBe(true);
-    expect(result.celebration).toBe("correctness-only");
+    expect(result.celebrations).toEqual([{ kind: "correctness-only", tag: "inline" }]);
   });
 
   it("reports incorrect and celebrates nothing when the submitted answer is not the Fact's product", () => {
@@ -262,7 +286,7 @@ describe("submitAttempt", () => {
     const result = submitAttempt(state, { type: "attemptSubmitted", answer: 42, responseTimeMs: 800 }, deps());
 
     expect(result.correct).toBe(false);
-    expect(result.celebration).toBe("none");
+    expect(result.celebrations).toEqual([]);
   });
 
   it("can select every Fact across the full range when weights are equal, not just a subset", () => {
@@ -310,11 +334,14 @@ describe("submitAttempt", () => {
   });
 
   it("celebrates correctness-only, not personal-best, on a Fact's first-ever Attempt", () => {
-    const state = createInitialState({ size: 1 }, deps());
+    // size 2 (not 1) so this single Attempt doesn't also Master 100% of
+    // the range and pull in an incidental range-expansion celebration -
+    // this test is only about the correctness-only/personal-best split.
+    const state = createInitialState({ size: 2 }, deps());
 
     const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 100 }, deps());
 
-    expect(result.celebration).toBe("correctness-only");
+    expect(result.celebrations).toEqual([{ kind: "correctness-only", tag: "inline" }]);
   });
 
   it("celebrates personal-best when beating the Fluency baseline (plus typing allowance)", () => {
@@ -323,7 +350,7 @@ describe("submitAttempt", () => {
 
     const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 500 }, deps());
 
-    expect(result.celebration).toBe("personal-best");
+    expect(result.celebrations).toEqual([{ kind: "personal-best", tag: "inline" }]);
   });
 
   it("celebrates correctness-only, not personal-best, when not beating the baseline", () => {
@@ -332,7 +359,7 @@ describe("submitAttempt", () => {
 
     const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 1500 }, deps());
 
-    expect(result.celebration).toBe("correctness-only");
+    expect(result.celebrations).toEqual([{ kind: "correctness-only", tag: "inline" }]);
   });
 
   it("compares against the decayed baseline, not the stale stored average", () => {
@@ -353,7 +380,7 @@ describe("submitAttempt", () => {
       deps({ now: () => 2 * DAY_MS }),
     );
 
-    expect(result.celebration).toBe("personal-best");
+    expect(result.celebrations).toEqual([{ kind: "personal-best", tag: "inline" }]);
   });
 
   it("applies the per-digit typing allowance to the personal-best comparison", () => {
@@ -367,7 +394,7 @@ describe("submitAttempt", () => {
     // 1250ms is slower than the 1000ms baseline, but within the 300ms allowance.
     const result = submitAttempt(state, { type: "attemptSubmitted", answer: 56, responseTimeMs: 1250 }, deps());
 
-    expect(result.celebration).toBe("personal-best");
+    expect(result.celebrations).toEqual([{ kind: "personal-best", tag: "inline" }]);
   });
 
   it("still counts a wrong Attempt as practice for decay purposes, without changing the average", () => {
@@ -405,7 +432,10 @@ describe("submitAttempt", () => {
         "2x1": { averageResponseMs: 500, lastAttemptAt: 0 },
         "2x2": { averageResponseMs: 500, lastAttemptAt: 0 },
       },
+      accuracy: {},
       boosted: {},
+      needsRedemption: {},
+      rangeHistory: { 2: 0 },
       streak: NEW_STREAK,
     };
     // total weight = 500 + 2500 + 500 + 500 = 4000; the slow Fact "1x2" occupies
@@ -429,7 +459,10 @@ describe("submitAttempt", () => {
         "2x1": { averageResponseMs: 500, lastAttemptAt: 0 },
         "2x2": { averageResponseMs: 2500, lastAttemptAt: 0 }, // un-Mastered so the range doesn't expand
       },
+      accuracy: {},
       boosted: { "1x2": 3 },
+      needsRedemption: {},
+      rangeHistory: { 2: 0 },
       streak: NEW_STREAK,
     };
     // "1x2" is boosted 4x -> weight 2000; total weight = 500 + 2000 + 500 + 2500 = 5500.
@@ -461,7 +494,7 @@ describe("submitAttempt", () => {
     expect(newlyUnlockedFact).toEqual({ a: 2, b: 2 });
   });
 
-  it("lets a Milestone-completing Attempt override the celebration even when answered incorrectly", () => {
+  it("includes a Milestone celebration even when the completing Attempt was answered incorrectly", () => {
     const state: EngineState = {
       ...createInitialState({ size: 1 }, deps({ now: () => day(5) })),
       streak: { count: 6, lastStreakDay: "2026-01-06", lastActivityDay: "2026-01-06", missedDays: 0 },
@@ -475,6 +508,217 @@ describe("submitAttempt", () => {
 
     expect(result.correct).toBe(false);
     expect(result.state.streak.count).toBe(7);
-    expect(result.celebration).toBe("milestone");
+    expect(result.celebrations).toEqual([{ kind: "milestone", tag: "takeover" }]);
+  });
+
+  describe("Accuracy", () => {
+    it("seeds Accuracy at 100% and an Attempt count of 1 on a Fact's first correct Attempt", () => {
+      const state = createInitialState({ size: 1 }, deps());
+
+      const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 }, deps());
+
+      expect(result.state.accuracy["1x1"]).toEqual({ correctShare: 1, attemptCount: 1 });
+    });
+
+    it("seeds Accuracy at 0% on a Fact's first wrong Attempt, still counting it as an Attempt", () => {
+      const state = createInitialState({ size: 1 }, deps());
+
+      const result = submitAttempt(state, { type: "attemptSubmitted", answer: -1, responseTimeMs: 800 }, deps());
+
+      expect(result.state.accuracy["1x1"]).toEqual({ correctShare: 0, attemptCount: 1 });
+    });
+
+    it("blends Accuracy as a recency-weighted average, mirroring Fluency's EMA weighting", () => {
+      let state = createInitialState({ size: 1 }, deps());
+      state = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 }, deps()).state; // correct
+
+      const result = submitAttempt(state, { type: "attemptSubmitted", answer: -1, responseTimeMs: 800 }, deps()); // wrong
+
+      // 0.3 * 0 + 0.7 * 1 = 0.7
+      expect(result.state.accuracy["1x1"].correctShare).toBeCloseTo(0.7);
+      expect(result.state.accuracy["1x1"].attemptCount).toBe(2);
+    });
+
+    it("keeps a lifetime Attempt count that only ever grows, across both correct and wrong Attempts", () => {
+      let state = createInitialState({ size: 1 }, deps());
+      state = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 }, deps()).state;
+      state = submitAttempt(state, { type: "attemptSubmitted", answer: -1, responseTimeMs: 800 }, deps()).state;
+
+      const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 }, deps());
+
+      expect(result.state.accuracy["1x1"].attemptCount).toBe(3);
+    });
+
+    it("does not decay Accuracy with elapsed time, unlike Fluency", () => {
+      let state = createInitialState({ size: 1 }, deps({ now: () => 0 }));
+      state = submitAttempt(
+        state,
+        { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 },
+        deps({ now: () => 0 }),
+      ).state;
+      const freshAccuracy = state.accuracy["1x1"];
+
+      // A long, Fact-untouched gap passes - only *this* Fact's Accuracy is
+      // being checked, and nothing here re-derives it from elapsed time the
+      // way currentFluencyMs does for Fluency.
+      const result = submitAttempt(
+        { ...state, fact: { a: 1, b: 1 } },
+        { type: "attemptSubmitted", answer: -1, responseTimeMs: 800 },
+        deps({ now: () => 365 * DAY_MS }),
+      );
+
+      // The pre-Attempt record (captured well before the gap) is unchanged
+      // by the passage of time - only this new wrong Attempt blends it down.
+      expect(freshAccuracy).toEqual({ correctShare: 1, attemptCount: 1 });
+      expect(result.state.accuracy["1x1"].correctShare).toBeCloseTo(0.7);
+    });
+
+    it("does not feed Fact selection weight or the progression threshold, even when catastrophically low", () => {
+      const withGoodAccuracy: EngineState = {
+        ...createInitialState({ size: 1 }, deps()),
+        fluency: { "1x1": { averageResponseMs: 500, lastAttemptAt: 0 } },
+        accuracy: { "1x1": { correctShare: 1, attemptCount: 10 } },
+      };
+      const withTerribleAccuracy: EngineState = {
+        ...withGoodAccuracy,
+        accuracy: { "1x1": { correctShare: 0, attemptCount: 10 } },
+      };
+
+      expect(computeWeight({ a: 1, b: 1 }, withGoodAccuracy, 0)).toBe(computeWeight({ a: 1, b: 1 }, withTerribleAccuracy, 0));
+      expect(isMastered({ a: 1, b: 1 }, withGoodAccuracy, 0)).toBe(isMastered({ a: 1, b: 1 }, withTerribleAccuracy, 0));
+      expect(nextActiveRange(withGoodAccuracy, 0)).toEqual(nextActiveRange(withTerribleAccuracy, 0));
+    });
+  });
+
+  describe("redemption (ADR 0003)", () => {
+    it("marks a Fact as needing redemption on a wrong Attempt", () => {
+      const state = createInitialState({ size: 1 }, deps());
+
+      const result = submitAttempt(state, { type: "attemptSubmitted", answer: -1, responseTimeMs: 800 }, deps());
+
+      expect(result.state.needsRedemption["1x1"]).toBe(true);
+    });
+
+    it("clears redemption once the Fact is answered correctly again", () => {
+      let state = createInitialState({ size: 1 }, deps());
+      state = submitAttempt(state, { type: "attemptSubmitted", answer: -1, responseTimeMs: 800 }, deps()).state;
+      expect(state.needsRedemption["1x1"]).toBe(true);
+
+      const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 }, deps());
+
+      expect(result.state.needsRedemption["1x1"]).toBeUndefined();
+    });
+
+    it("does not clear redemption via the boost counter fading out - only a correct Attempt on the Fact clears it", () => {
+      // ADR 0003's trap: boosts fade after BOOST_ATTEMPTS Attempts across
+      // ANY Fact, so cycling other Facts must not silently clear
+      // redemption on the untouched wrong Fact.
+      const range = { size: 2 };
+      let state: EngineState = { ...createInitialState(range, deps()), fact: { a: 1, b: 2 } };
+      state = submitAttempt(state, { type: "attemptSubmitted", answer: -1, responseTimeMs: 800 }, deps()).state; // wrong on 1x2
+      expect(state.needsRedemption["1x2"]).toBe(true);
+
+      // Burn through more Attempts than BOOST_ATTEMPTS on a *different* Fact
+      // so 1x2's boost fully decays, without ever answering 1x2 correctly.
+      for (let i = 0; i < 10; i++) {
+        state = { ...state, fact: { a: 1, b: 1 } };
+        state = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 }, deps()).state;
+      }
+
+      expect(state.boosted["1x2"]).toBeUndefined(); // the boost has faded...
+      expect(state.needsRedemption["1x2"]).toBe(true); // ...but redemption has not
+
+      const stillNotMastered: EngineState = {
+        ...state,
+        fluency: { ...state.fluency, "1x2": { averageResponseMs: 100, lastAttemptAt: 0 } }, // very fast
+      };
+      expect(isMastered({ a: 1, b: 2 }, stillNotMastered, 0)).toBe(false);
+    });
+  });
+
+  describe("range history and expansion celebration", () => {
+    it("records reachedAt for the newly-reached size when the Active range expands", () => {
+      // size 1 => a single Fact; one fast correct Attempt Masters 100%.
+      const state = createInitialState({ size: 1 }, deps({ now: () => 0 }));
+
+      const result = submitAttempt(
+        state,
+        { type: "attemptSubmitted", answer: 1, responseTimeMs: 100 },
+        deps({ now: () => 42_000 }),
+      );
+
+      expect(result.state.activeRange).toEqual({ size: 2 });
+      expect(result.state.rangeHistory[2]).toBe(42_000);
+    });
+
+    it("includes range-expansion as a takeover celebration when the Active range expands", () => {
+      const state = createInitialState({ size: 1 }, deps());
+
+      const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 100 }, deps());
+
+      expect(result.celebrations).toContainEqual({ kind: "range-expansion", tag: "takeover" });
+    });
+
+    it("does not add a range-expansion celebration or history entry when the range does not expand", () => {
+      const state = createInitialState({ size: 5 }, deps({ now: () => 0 })); // far from 90% Mastered
+
+      const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 100 }, deps());
+
+      expect(result.state.activeRange).toEqual({ size: 5 });
+      expect(result.celebrations).not.toContainEqual(expect.objectContaining({ kind: "range-expansion" }));
+      expect(result.state.rangeHistory).toEqual(state.rangeHistory);
+    });
+
+    it("preserves history for earlier sizes when a later expansion is recorded", () => {
+      let state = createInitialState({ size: 1 }, deps({ now: () => 0 }));
+      state = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 100 }, deps({ now: () => 1000 })).state;
+      expect(state.activeRange).toEqual({ size: 2 });
+
+      state = { ...state, fact: { a: 1, b: 2 } };
+      state = submitAttempt(state, { type: "attemptSubmitted", answer: 2, responseTimeMs: 100 }, deps({ now: () => 2000 })).state;
+      state = { ...state, fact: { a: 2, b: 1 } };
+      state = submitAttempt(state, { type: "attemptSubmitted", answer: 2, responseTimeMs: 100 }, deps({ now: () => 3000 })).state;
+      state = { ...state, fact: { a: 2, b: 2 } };
+      const result = submitAttempt(state, { type: "attemptSubmitted", answer: 4, responseTimeMs: 100 }, deps({ now: () => 4000 }));
+
+      expect(result.state.activeRange).toEqual({ size: 3 });
+      expect(result.state.rangeHistory).toEqual({ 1: 0, 2: 1000, 3: 4000 });
+    });
+  });
+
+  describe("multiple simultaneous celebrations", () => {
+    it("produces personal-best, range-expansion, and milestone together from a single Attempt", () => {
+      // size 1 => a single Fact { a: 1, b: 1 }. Seed a Fluency baseline slow
+      // enough that a 100ms response beats it (personal-best) but close
+      // enough to the target that the *blended* average still lands under
+      // TARGET_SPEED_MS (mastery, hence expansion - a 5000ms baseline would
+      // pass the personal-best check but EMA-blend to well over the
+      // mastery target from a single fast Attempt). A Streak already at 6
+      // makes this the 7th day (Milestone) with guaranteed recovery
+      // (missedDays=0).
+      const state: EngineState = {
+        ...createInitialState({ size: 1 }, deps({ now: () => day(5) })),
+        fluency: { "1x1": { averageResponseMs: 2500, lastAttemptAt: day(5) } },
+        streak: { count: 6, lastStreakDay: "2026-01-06", lastActivityDay: "2026-01-06", missedDays: 0 },
+      };
+
+      const result = submitAttempt(
+        state,
+        { type: "attemptSubmitted", answer: 1, responseTimeMs: 100 },
+        deps({ now: () => day(6) }),
+      );
+
+      expect(result.correct).toBe(true);
+      expect(result.state.activeRange).toEqual({ size: 2 });
+      expect(result.state.streak.count).toBe(7);
+      expect(result.celebrations).toEqual(
+        expect.arrayContaining([
+          { kind: "personal-best", tag: "inline" },
+          { kind: "range-expansion", tag: "takeover" },
+          { kind: "milestone", tag: "takeover" },
+        ]),
+      );
+      expect(result.celebrations).toHaveLength(3);
+    });
   });
 });

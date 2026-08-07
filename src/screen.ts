@@ -61,8 +61,11 @@ export function pressBackspace(screen: ScreenState): ScreenState {
 export type EnterOutcome =
   // Enter with nothing typed is a no-op - there's nothing to submit.
   | { kind: "empty" }
-  | { kind: "correct"; celebration: Celebration }
-  | { kind: "incorrect" }
+  | { kind: "correct"; celebrations: Celebration[] }
+  // A wrong Attempt can still carry a Celebration (e.g. a Milestone -
+  // Streak advances on every Attempt regardless of correctness), so this
+  // carries the engine's set through same as "correct" does.
+  | { kind: "incorrect"; celebrations: Celebration[] }
   | { kind: "correction-dismissed" }
   // Retyped digits don't match yet; stays in "correcting" so the Learner
   // can backspace and fix it rather than starting over.
@@ -100,7 +103,7 @@ export function pressEnter(screen: ScreenState, deps: Dependencies): EnterResult
   const result = submitAttempt(screen.engine, { type: "attemptSubmitted", answer, responseTimeMs }, deps);
 
   if (result.correct) {
-    return { screen: toAnswering(result.state, deps), outcome: { kind: "correct", celebration: result.celebration } };
+    return { screen: toAnswering(result.state, deps), outcome: { kind: "correct", celebrations: result.celebrations } };
   }
 
   const next: CorrectingScreen = {
@@ -110,5 +113,5 @@ export function pressEnter(screen: ScreenState, deps: Dependencies): EnterResult
     wrongFact,
     correctAnswer: wrongFact.a * wrongFact.b,
   };
-  return { screen: next, outcome: { kind: "incorrect" } };
+  return { screen: next, outcome: { kind: "incorrect", celebrations: result.celebrations } };
 }
