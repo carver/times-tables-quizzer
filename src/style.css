@@ -10,15 +10,23 @@ body {
   margin: 0;
 }
 
-.quiz {
-  display: flex;
+/* Shared shell for all three screens (map, quiz, stats) - hash routing
+   (route.ts / main.ts) toggles data-active rather than swapping DOM
+   trees, so exactly one of these is display:flex at a time. */
+.screen {
+  display: none;
   flex-direction: column;
   height: 100vh;
   height: 100dvh;
 }
 
+.screen[data-active="true"] {
+  display: flex;
+}
+
 /* Zone 1: a compact, quiet header. */
 .quiz-header {
+  position: relative;
   flex: 0 0 auto;
   padding: 0.5rem 1rem;
   text-align: center;
@@ -28,6 +36,30 @@ body {
   font-size: 1rem;
   opacity: 0.7;
   margin: 0;
+  /* Purely informational text, but its box spans the full header width
+     (it's a block-level <p>) - without this, it sits on top of the
+     absolutely-positioned .map-link in the same header and steals the
+     corner's clicks/taps despite there being nothing to see there. */
+  pointer-events: none;
+}
+
+/* The quiz screen's only way back to the Progress map - small and quiet
+   on purpose (ticket #11: nothing here should compete with practicing,
+   unlike the map's deliberately larger Practice button). */
+.map-link {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.15rem;
+  line-height: 1;
+  opacity: 0.35;
+  text-decoration: none;
+  color: CanvasText;
+}
+
+.map-link:active {
+  opacity: 0.6;
 }
 
 /* Zone 2: the large center block - the Fact, with the typed answer
@@ -141,4 +173,115 @@ body {
 
 .key-backspace {
   font-weight: 600;
+}
+
+/* Progress map - the app's home screen (CONTEXT.md). One 12x12 grid
+   outline with the conquered Active-range corner filled: deliberately
+   the same grid shape ADR 0004 settles for the statistics pages, so the
+   Learner learns it once. */
+.map-screen {
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 1.5rem 1rem;
+  text-align: center;
+}
+
+.map-header {
+  flex: 0 0 auto;
+}
+
+/* Positioning context for .progress-readout's frontier placement below -
+   sized to match .progress-grid exactly so percentage offsets line up
+   with actual grid boundaries. */
+.progress-grid-wrap {
+  position: relative;
+  width: min(85vw, 320px);
+}
+
+.progress-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: repeat(12, 1fr);
+  gap: 2px;
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+.grid-cell {
+  border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+  border-radius: 2px;
+  background: transparent;
+}
+
+.grid-cell--filled {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* The progress-to-expansion readout: a count remaining ("3 to go"), not
+   a percentage. Once the grid is full it becomes a maintenance readout
+   ("142 of 144 sharp") instead - styled a touch quieter since it's
+   informational rather than motivating toward a next unlock, and laid
+   out in normal flow below the grid since there's no frontier left to
+   point at. */
+.progress-readout {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0;
+}
+
+.progress-readout[data-kind="maintenance"] {
+  opacity: 0.75;
+  font-weight: 500;
+}
+
+/* "The current frontier row/column is where the progress-to-expansion
+   indicator lives" (ticket #11) - while there's still a frontier to
+   expand toward, the readout is pinned to the boundary corner where the
+   filled square ends and the next row/column begins (main.ts sets
+   left/top as a percentage of .progress-grid-wrap), rather than sitting
+   as a generic caption under the whole grid. */
+.progress-readout[data-kind="remaining"] {
+  position: absolute;
+  margin: 0;
+  padding: 0.15rem 0.45rem;
+  background: color-mix(in srgb, Canvas 88%, transparent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  transform: translate(4px, 4px);
+}
+
+.practice-button {
+  display: inline-block;
+  padding: 0.9rem 2.75rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.practice-button:active {
+  background: color-mix(in srgb, var(--accent) 80%, black);
+}
+
+/* Quiet on purpose - a menu item, not a second call to action next to
+   Practice. */
+.stats-link {
+  font-size: 0.95rem;
+  opacity: 0.6;
+  text-decoration: none;
+  color: CanvasText;
+}
+
+.stats-screen {
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  text-align: center;
+  padding: 0 1rem;
 }

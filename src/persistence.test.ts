@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { NEW_STREAK, type EngineState } from "./engine/engine";
-import { CURRENT_SAVE_VERSION, loadState, saveState } from "./persistence";
+import { CURRENT_SAVE_VERSION, loadState, saveState, type AppState } from "./persistence";
 
 const STORAGE_KEY = "times-tables-quizzer:state";
 
@@ -31,7 +31,7 @@ beforeEach(() => {
   (globalThis as { localStorage?: unknown }).localStorage = new FakeLocalStorage();
 });
 
-const fullState: EngineState = {
+const fullEngineState: EngineState = {
   activeRange: { size: 5 },
   fact: { a: 2, b: 3 },
   fluency: { "2x3": { averageResponseMs: 900, lastAttemptAt: 1000 } },
@@ -42,19 +42,27 @@ const fullState: EngineState = {
   streak: { ...NEW_STREAK, count: 2 },
 };
 
+const fullAppState: AppState = { engine: fullEngineState, lastMapShownDay: "2026-08-07" };
+
 describe("saveState / loadState round trip", () => {
   it("returns null when nothing has been saved", () => {
     expect(loadState()).toBeNull();
   });
 
-  it("loads back exactly what was saved, including the fields added by ticket #10", () => {
-    saveState(fullState);
+  it("loads back exactly what was saved, including the fields added by ticket #10 and #11's lastMapShownDay", () => {
+    saveState(fullAppState);
 
-    expect(loadState()).toEqual(fullState);
+    expect(loadState()).toEqual(fullAppState);
+  });
+
+  it("round-trips a null lastMapShownDay (never shown yet)", () => {
+    saveState({ engine: fullEngineState, lastMapShownDay: null });
+
+    expect(loadState()).toEqual({ engine: fullEngineState, lastMapShownDay: null });
   });
 
   it("stamps the saved payload with the current version", () => {
-    saveState(fullState);
+    saveState(fullAppState);
 
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
     expect(raw.version).toBe(CURRENT_SAVE_VERSION);
@@ -78,10 +86,13 @@ describe("migration", () => {
     const loaded = loadState();
 
     expect(loaded).toEqual({
-      ...preTicket10Save,
-      accuracy: {},
-      needsRedemption: {},
-      rangeHistory: {},
+      engine: {
+        ...preTicket10Save,
+        accuracy: {},
+        needsRedemption: {},
+        rangeHistory: {},
+      },
+      lastMapShownDay: null,
     });
   });
 
@@ -90,8 +101,25 @@ describe("migration", () => {
 
     const loaded = loadState();
 
-    expect(loaded?.fluency).toEqual(preTicket10Save.fluency);
-    expect(loaded?.streak.count).toBe(5);
+    expect(loaded?.engine.fluency).toEqual(preTicket10Save.fluency);
+    expect(loaded?.engine.streak.count).toBe(5);
+  });
+
+  // Simulates a save written before ticket #11 - has ticket #10's fields
+  // but predates lastMapShownDay entirely.
+  const preTicket11Save = {
+    ...preTicket10Save,
+    accuracy: {},
+    needsRedemption: {},
+    rangeHistory: { 3: 100 },
+  };
+
+  it("defaults lastMapShownDay to null (never shown) for a save that predates it", () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(preTicket11Save));
+
+    const loaded = loadState();
+
+    expect(loaded).toEqual({ engine: preTicket11Save, lastMapShownDay: null });
   });
 
   it("discards a save missing core (pre-ticket-#10) fields rather than half-migrating it", () => {

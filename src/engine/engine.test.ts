@@ -13,6 +13,7 @@ import {
   UNATTEMPTED_WEIGHT_MS,
   type EngineState,
 } from "./engine";
+import { stateWithMasteredCount } from "./testHelpers";
 
 const DAY_MS = 86_400_000;
 
@@ -181,18 +182,6 @@ describe("isMastered", () => {
 });
 
 describe("nextActiveRange", () => {
-  function stateWithMasteredCount(range: { size: number }, masteredCount: number) {
-    const facts = listFacts(range);
-    const fluency: Record<string, { averageResponseMs: number; lastAttemptAt: number }> = {};
-    facts.forEach((fact, i) => {
-      fluency[`${fact.a}x${fact.b}`] = {
-        averageResponseMs: i < masteredCount ? 100 : TARGET_SPEED_MS + 10_000,
-        lastAttemptAt: 0,
-      };
-    });
-    return { activeRange: range, fluency, needsRedemption: {} };
-  }
-
   it("does not expand when fewer than 90% of the range is Mastered", () => {
     const state = stateWithMasteredCount({ size: 5 }, 22); // 22/25 = 88%
 
