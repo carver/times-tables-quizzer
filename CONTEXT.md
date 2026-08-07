@@ -13,7 +13,7 @@ A single multiplication combination (e.g., "7 × 8") — the atomic unit the Lea
 _Avoid_: Problem, question
 
 **Attempt**:
-One instance of the Learner being shown a Fact and responding. Produces a correctness result and a response time.
+One instance of the Learner being shown a Fact and responding. Produces a correctness result and a response time. Retyping the correct answer after getting a Fact wrong is *not* an Attempt — it's practice, not measurement, and it never feeds Fluency, Accuracy, or the Streak.
 _Avoid_: Try, guess, answer (as a noun for the event)
 
 **Active range**:
@@ -24,9 +24,21 @@ _Avoid_: Level, tier, stage
 A per-Fact, recency-weighted average of correct Attempts' response times, which passively decays the longer the Fact goes unpracticed. Compared against a fixed target speed to decide progression, and used as the Learner's personal baseline for celebration. A wrong Attempt doesn't feed Fluency but immediately forces the Fact back into heavy rotation regardless of it.
 _Avoid_: Score, mastery, speed
 
+**Accuracy**:
+A per-Fact, recency-weighted share of Attempts that were correct. Unlike Fluency, it does *not* decay with time — forgetting shows up as slowness first, and a Learner who takes a holiday hasn't become less accurate. Reported to the Learner; it deliberately doesn't feed Fact selection or the progression threshold.
+_Avoid_: Correctness rate, success rate, score
+
 **Mastered**:
-A Fact whose Fluency is currently under the target speed. The Active range expands once enough of its Facts are Mastered.
+A Fact whose Fluency is currently under the target speed *and* which has been answered correctly since its most recent wrong Attempt. The Active range expands once enough of its Facts are Mastered.
 _Avoid_: Learned, known
+
+**Celebration**:
+The positive feedback produced by an Attempt. An Attempt yields a *set* of Celebrations, not one — the same Attempt can be a personal best, expand the Active range, and hit a Milestone. Each is either **inline** (plays over the practice screen without interrupting) or a **takeover** (fills the screen and waits for the Learner to dismiss it).
+_Avoid_: Reward, feedback, animation
+
+**Progress map**:
+The Learner's view of the whole 12 × 12 grid of Facts, with the conquered corner filled and the rest still to come — the app's home screen. Shows where the Active range currently reaches and how close it is to expanding.
+_Avoid_: Dashboard, home, level select
 
 **Streak**:
 A count of consecutive days with at least one Attempt. A day with zero Attempts breaks it, but on return each Attempt has a `1 / (missed days + 1)` chance of recovering it — adding 1 for the return day only, never backfilling the missed days. "Missed days" counts only days with zero Attempts; practicing without yet recovering doesn't worsen the odds. Rolling stops once recovery succeeds, or after the first Attempt on an unbroken day.

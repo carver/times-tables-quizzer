@@ -1,0 +1,15 @@
+# Two single-hue ramps for the statistics grids, not red/green and blue→green
+
+The statistics page shows two 12 × 12 grids of Facts — one for Accuracy, one for speed. The obvious encoding, and the one originally asked for, was a red→green scale for Accuracy and a blue→green scale for speed. Both were rejected.
+
+`blue→green` is two hues carrying a single continuous magnitude. The point where the hue turns over reads as a category boundary that isn't in the data, so cells sort themselves into "the blue ones" and "the green ones" instead of along a ramp. Continuous magnitude takes one hue, light→dark. `red→green` has the same structural problem plus the worst possible pair for red-green colorblindness; the Learner isn't colorblind, but the grids are the app's most-shared screen and the encoding shouldn't depend on that staying true of everyone who sees it.
+
+Both grids therefore use **one hue each, light→dark, with darker meaning better**: Accuracy on an orange ramp, speed on a blue ramp, five discrete steps each rather than a continuous gradient (144 small cells can't communicate a gradient, and discrete steps make the legend a legend instead of a color bar). The rule is uniform across both grids and states in one sentence — *darker means you're better at it, empty means you haven't tried it yet* — which matters more here than for a typical chart, because the primary reader is nine years old and shouldn't have to learn two encodings.
+
+Three cell states sit outside the ramps: a Fact never attempted renders empty (surface plus a hairline ring), a Fact attempted but never once answered correctly renders soft amber on both grids, and a Fact with only one or two Attempts renders at its ramp step but with a dashed ring, marking it provisional. The amber state is the page's most actionable signal and would be invisible if it were folded in with never-attempted.
+
+The speed grid buckets each Fact by the ratio of its current Fluency to *its own* target (the fixed target speed plus that Fact's typing allowance) rather than by raw milliseconds, so that a ramp break falls exactly at a ratio of 1.0 — the Mastered line is visible as the boundary between the two middle shades. Since the only per-Fact variation is the typing allowance that `CONTEXT.md` already defines, this barely distorts cross-Fact speed comparison and buys a direct read of which Facts count toward expansion.
+
+Considered and rejected: a diverging red↔blue scale for Accuracy anchored at the 90% threshold (it uses the range better, since Accuracy clusters near 100% and a 0–100% sequential ramp spends most of its steps on values that never occur — but it requires holding a "the middle is neutral, both directions mean something" concept, which is too much to ask of the intended reader); keeping red→green and adding a texture overlay as the accessibility channel (patches the colorblindness exposure without fixing the false category boundary).
+
+Traffic-light encoding will look like the obvious fix to anyone arriving at this file cold. It isn't one.

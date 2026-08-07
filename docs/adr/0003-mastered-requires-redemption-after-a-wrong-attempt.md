@@ -1,0 +1,9 @@
+# Mastered requires redemption after a wrong Attempt
+
+ADR 0001 frames progression as an objective speed question, and the original rule followed from that: a Fact is Mastered when its current (decayed) Fluency is under the fixed target speed. Because a wrong Attempt deliberately doesn't feed Fluency, that rule let a Fact the Learner had just gotten *wrong* still count toward expanding the Active range — its stored average was untouched, so nothing about the mistake was visible to the progression check. The temporary selection-weight boost was the only consequence, and boosts fade after a handful of Attempts across any Fact, so a wrong Fact could quietly re-qualify as Mastered within about thirty seconds without ever having been redrawn.
+
+Mastered now carries a second condition: the Fact must have been answered correctly since its most recent wrong Attempt. One boolean per Fact, no threshold to tune, and it states as a rule the Learner can be told out loud — *get it wrong, and you have to get it right again before it counts.*
+
+This is a deliberate narrowing of ADR 0001's "progression is a speed question" framing, not a contradiction of it: the speed bar is unchanged and still uniform across Facts. What's added is a floor of evidence beneath it, because "fast enough on average" and "hasn't demonstrably just failed" are different claims and expansion should require both.
+
+Considered and rejected: reusing the existing boost counter as the block (free, but expires on elapsed Attempts rather than on evidence, so it fails exactly the case it's meant to catch); requiring N consecutive correct Attempts (a tunable that would need justifying, and a Fact answered correctly once after a slip has already shown what the rule is asking for); folding Accuracy into the progression threshold (a much larger change that would put a second signal into the expansion arithmetic — see the Accuracy entry in `CONTEXT.md`, which is deliberately display-only).
