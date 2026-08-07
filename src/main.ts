@@ -3,7 +3,7 @@ import { createInitialState, submitAttempt, type Dependencies, type EngineState 
 import { loadState, saveState } from "./persistence";
 
 const INITIAL_ACTIVE_RANGE = { size: 5 };
-const deps: Dependencies = { random: Math.random };
+const deps: Dependencies = { random: Math.random, now: Date.now };
 
 function getEl<T extends HTMLElement>(id: string): T {
   return document.querySelector<T>(`#${id}`)!;
@@ -26,16 +26,19 @@ const inputEl = getEl<HTMLInputElement>("answer-input");
 const feedbackEl = getEl<HTMLParagraphElement>("feedback");
 
 let state: EngineState = loadState() ?? createInitialState(INITIAL_ACTIVE_RANGE, deps);
+let factShownAt = deps.now();
 
 function render() {
   promptEl.textContent = `${state.fact.a} × ${state.fact.b} = ?`;
+  factShownAt = deps.now();
 }
 
 formEl.addEventListener("submit", (submitEvent) => {
   submitEvent.preventDefault();
 
   const answer = Number(inputEl.value);
-  const result = submitAttempt(state, { type: "attemptSubmitted", answer }, deps);
+  const responseTimeMs = deps.now() - factShownAt;
+  const result = submitAttempt(state, { type: "attemptSubmitted", answer, responseTimeMs }, deps);
   state = result.state;
   saveState(state);
 
