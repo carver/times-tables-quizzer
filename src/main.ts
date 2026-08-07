@@ -1,5 +1,8 @@
 import "./style.css";
-import { createInitialState, submitAttempt, type EngineState } from "./engine/engine";
+import { createInitialState, submitAttempt, type Dependencies, type EngineState } from "./engine/engine";
+
+const INITIAL_ACTIVE_RANGE = { size: 5 };
+const deps: Dependencies = { random: Math.random };
 
 function getEl<T extends HTMLElement>(id: string): T {
   return document.querySelector<T>(`#${id}`)!;
@@ -21,7 +24,7 @@ const formEl = getEl<HTMLFormElement>("answer-form");
 const inputEl = getEl<HTMLInputElement>("answer-input");
 const feedbackEl = getEl<HTMLParagraphElement>("feedback");
 
-let state: EngineState = createInitialState({ a: 6, b: 7 });
+let state: EngineState = createInitialState(INITIAL_ACTIVE_RANGE, deps);
 
 function render() {
   promptEl.textContent = `${state.fact.a} × ${state.fact.b} = ?`;
@@ -31,7 +34,7 @@ formEl.addEventListener("submit", (submitEvent) => {
   submitEvent.preventDefault();
 
   const answer = Number(inputEl.value);
-  const result = submitAttempt(state, { type: "attemptSubmitted", answer });
+  const result = submitAttempt(state, { type: "attemptSubmitted", answer }, deps);
   state = result.state;
 
   feedbackEl.textContent = result.correct ? "Correct!" : "Not quite — try again!";
@@ -39,6 +42,7 @@ formEl.addEventListener("submit", (submitEvent) => {
 
   inputEl.value = "";
   inputEl.focus();
+  render();
 });
 
 render();
