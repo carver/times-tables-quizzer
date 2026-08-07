@@ -90,6 +90,32 @@ export function computeWeight(fact: Fact, state: Pick<EngineState, "fluency" | "
   return remainingBoost > 0 ? baseWeight * BOOST_WEIGHT_MULTIPLIER : baseWeight;
 }
 
+// The fixed automaticity bar for progression (ADR 0001) - the same for
+// every Fact, unlike the celebration baseline which is personal per Fact.
+export const TARGET_SPEED_MS = 2_000;
+
+// Share of the Active range that must be Mastered before it expands.
+export const MASTERY_THRESHOLD = 0.9;
+
+// The full 1-12 x 1-12 grid is the largest Active range; progression stops there.
+export const MAX_ACTIVE_RANGE_SIZE = 12;
+
+export function isMastered(fact: Fact, state: Pick<EngineState, "fluency">, now: number): boolean {
+  const target = TARGET_SPEED_MS + typingAllowanceMs(fact.a * fact.b);
+  return currentFluencyMs(state.fluency[factKey(fact)], now) < target;
+}
+
+export function nextActiveRange(state: Pick<EngineState, "activeRange" | "fluency">, now: number): ActiveRange {
+  const facts = listFacts(state.activeRange);
+  const masteredCount = facts.filter((fact) => isMastered(fact, state, now)).length;
+  const isRangeMastered = masteredCount / facts.length >= MASTERY_THRESHOLD;
+
+  if (isRangeMastered && state.activeRange.size < MAX_ACTIVE_RANGE_SIZE) {
+    return { size: state.activeRange.size + 1 };
+  }
+  return state.activeRange;
+}
+
 export type AttemptSubmitted = {
   type: "attemptSubmitted";
   answer: number;
@@ -173,7 +199,8 @@ export function submitAttempt(
     }
   }
 
-  const nextState: EngineState = { ...state, fluency, boosted };
+  const activeRange = nextActiveRange({ activeRange: state.activeRange, fluency }, now);
+  const nextState: EngineState = { ...state, activeRange, fluency, boosted };
 
   return {
     state: { ...nextState, fact: pickFact(nextState, deps) },

@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   computeWeight,
   createInitialState,
+  isMastered,
   listFacts,
+  nextActiveRange,
   submitAttempt,
+  TARGET_SPEED_MS,
   typingAllowanceMs,
   UNATTEMPTED_WEIGHT_MS,
   type EngineState,
@@ -43,6 +46,63 @@ describe("typingAllowanceMs", () => {
   it("gives more allowance for each extra digit", () => {
     expect(typingAllowanceMs(56)).toBe(300);
     expect(typingAllowanceMs(144)).toBe(600);
+  });
+});
+
+describe("isMastered", () => {
+  it("is not Mastered when never attempted", () => {
+    const fact = { a: 3, b: 4 };
+    expect(isMastered(fact, { fluency: {} }, 0)).toBe(false);
+  });
+
+  it("is Mastered when current Fluency is under the target speed", () => {
+    const fact = { a: 1, b: 1 }; // 1-digit product, no typing allowance
+    const state = { fluency: { "1x1": { averageResponseMs: TARGET_SPEED_MS - 1, lastAttemptAt: 0 } } };
+    expect(isMastered(fact, state, 0)).toBe(true);
+  });
+
+  it("is not Mastered when current Fluency is at or over the target speed", () => {
+    const fact = { a: 1, b: 1 };
+    const state = { fluency: { "1x1": { averageResponseMs: TARGET_SPEED_MS, lastAttemptAt: 0 } } };
+    expect(isMastered(fact, state, 0)).toBe(false);
+  });
+
+  it("applies the per-digit typing allowance to the target for multi-digit products", () => {
+    const fact = { a: 7, b: 8 }; // product 56, 2 digits => +300ms allowance
+    const state = { fluency: { "7x8": { averageResponseMs: TARGET_SPEED_MS + 200, lastAttemptAt: 0 } } };
+    expect(isMastered(fact, state, 0)).toBe(true);
+  });
+});
+
+describe("nextActiveRange", () => {
+  function stateWithMasteredCount(range: { size: number }, masteredCount: number) {
+    const facts = listFacts(range);
+    const fluency: Record<string, { averageResponseMs: number; lastAttemptAt: number }> = {};
+    facts.forEach((fact, i) => {
+      fluency[`${fact.a}x${fact.b}`] = {
+        averageResponseMs: i < masteredCount ? 100 : TARGET_SPEED_MS + 10_000,
+        lastAttemptAt: 0,
+      };
+    });
+    return { activeRange: range, fluency };
+  }
+
+  it("does not expand when fewer than 90% of the range is Mastered", () => {
+    const state = stateWithMasteredCount({ size: 5 }, 22); // 22/25 = 88%
+
+    expect(nextActiveRange(state, 0)).toEqual({ size: 5 });
+  });
+
+  it("expands to the next grid size once at least 90% of the range is Mastered", () => {
+    const state = stateWithMasteredCount({ size: 5 }, 23); // 23/25 = 92%
+
+    expect(nextActiveRange(state, 0)).toEqual({ size: 6 });
+  });
+
+  it("never expands past the full 1-12 x 1-12 grid", () => {
+    const state = stateWithMasteredCount({ size: 12 }, 144); // 100% Mastered
+
+    expect(nextActiveRange(state, 0)).toEqual({ size: 12 });
   });
 });
 
@@ -245,18 +305,18 @@ describe("submitAttempt", () => {
       fact: { a: 1, b: 1 },
       fluency: {
         "1x1": { averageResponseMs: 500, lastAttemptAt: 0 }, // fast
-        "1x2": { averageResponseMs: 1500, lastAttemptAt: 0 }, // slow
+        "1x2": { averageResponseMs: 2500, lastAttemptAt: 0 }, // slow, and un-Mastered so the range doesn't expand
         "2x1": { averageResponseMs: 500, lastAttemptAt: 0 },
         "2x2": { averageResponseMs: 500, lastAttemptAt: 0 },
       },
       boosted: {},
     };
-    // total weight = 500 + 1500 + 500 + 500 = 3000; the slow Fact "1x2" occupies
-    // the cumulative range [500, 2000) out of 3000.
+    // total weight = 500 + 2500 + 500 + 500 = 4000; the slow Fact "1x2" occupies
+    // the cumulative range [500, 3000) out of 4000.
     const result = submitAttempt(
       state,
       { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 },
-      deps({ random: () => 1000 / 3000 }),
+      deps({ random: () => 1000 / 4000 }),
     );
 
     expect(result.state.fact).toEqual({ a: 1, b: 2 });
@@ -270,18 +330,36 @@ describe("submitAttempt", () => {
         "1x1": { averageResponseMs: 500, lastAttemptAt: 0 },
         "1x2": { averageResponseMs: 500, lastAttemptAt: 0 },
         "2x1": { averageResponseMs: 500, lastAttemptAt: 0 },
-        "2x2": { averageResponseMs: 500, lastAttemptAt: 0 },
+        "2x2": { averageResponseMs: 2500, lastAttemptAt: 0 }, // un-Mastered so the range doesn't expand
       },
       boosted: { "1x2": 3 },
     };
-    // "1x2" is boosted 4x -> weight 2000; total weight = 500*3 + 2000 = 3500.
-    // "1x2" occupies the cumulative range [500, 2500) out of 3500.
+    // "1x2" is boosted 4x -> weight 2000; total weight = 500 + 2000 + 500 + 2500 = 5500.
+    // "1x2" occupies the cumulative range [500, 2500) out of 5500.
     const result = submitAttempt(
       state,
       { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 },
-      deps({ random: () => 1000 / 3500 }),
+      deps({ random: () => 1000 / 5500 }),
     );
 
     expect(result.state.fact).toEqual({ a: 1, b: 2 });
+  });
+
+  it("expands the Active range mid-flow and makes newly-unlocked Facts selectable", () => {
+    // size 1 => a single Fact { a: 1, b: 1 }. One fast, correct Attempt
+    // Masters 100% of the range, so the very next state should expand to
+    // size 2 and be able to select one of the newly-added Facts.
+    const state = createInitialState({ size: 1 }, deps());
+
+    const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 100 }, deps());
+
+    expect(result.state.activeRange).toEqual({ size: 2 });
+
+    const newlyUnlockedFact = submitAttempt(
+      result.state,
+      { type: "attemptSubmitted", answer: -1, responseTimeMs: 100 },
+      deps({ random: () => 0.99 }),
+    ).state.fact;
+    expect(newlyUnlockedFact).toEqual({ a: 2, b: 2 });
   });
 });
