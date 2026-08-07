@@ -13,6 +13,10 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 Infer the repo from `git remote -v` — `gh` does this automatically when run inside a clone.
 
+## Closing tickets via commit message
+
+This repo runs hands-off: when a commit's work closes out a ticket, use a GitHub auto-close keyword (`Closes #<n>`, `Fixes #<n>`, `Resolves #<n>`) in the commit message rather than closing it as a separate manual step. It closes automatically once the commit reaches the default branch. Only skip the keyword when the commit doesn't fully satisfy the ticket's acceptance criteria (partial work, a prerequisite-only commit, etc.) — close those manually with a comment once the remaining work lands.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
