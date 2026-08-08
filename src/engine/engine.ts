@@ -352,11 +352,24 @@ export type Dependencies = {
   now: () => number;
 };
 
+// Hard-excludes `previousKey` (the Fact just answered, if any) from the
+// draw whenever another Fact is available, so the same problem can never
+// appear twice in a row. Weighting alone doesn't guarantee this: a Fact
+// that's just been answered wrong is boosted (BOOST_WEIGHT_MULTIPLIER)
+// and, if the Learner is genuinely stuck on it, gets re-boosted to the
+// same full weight on every subsequent wrong Attempt on it - a real
+// feedback loop that can otherwise dominate the draw for many Attempts
+// in a row. Falls back to including it when it's the only Fact in the
+// Active range (size 1), rather than looping forever with an empty
+// candidate list.
 function pickFact(
   state: Pick<EngineState, "activeRange" | "fluency" | "boosted" | "needsRedemption">,
   deps: Dependencies,
+  previousKey?: FactKey,
 ): Fact {
-  const facts = listFacts(state.activeRange);
+  const allFacts = listFacts(state.activeRange);
+  const facts =
+    previousKey !== undefined && allFacts.length > 1 ? allFacts.filter((fact) => factKey(fact) !== previousKey) : allFacts;
   const now = deps.now();
   const weights = facts.map((fact) => computeWeight(fact, state, now));
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
@@ -500,7 +513,7 @@ export function submitAttempt(
   };
 
   return {
-    state: { ...nextState, fact: pickFact(nextState, deps) },
+    state: { ...nextState, fact: pickFact(nextState, deps, key) },
     correct,
     celebrations,
   };

@@ -337,6 +337,34 @@ describe("submitAttempt", () => {
     expect(seenFacts.size).toBe(allFacts.length);
   });
 
+  it("never draws the same Fact twice in a row, even when it's boosted after repeated wrong Attempts", () => {
+    // A Learner stuck on the current Fact re-boosts it to full weight on
+    // every wrong Attempt against it (BOOST_ATTEMPTS resets rather than
+    // decays when the boosted Fact is the one just answered), which can
+    // make it the heaviest candidate again and again. Weighting alone
+    // doesn't rule out redrawing it immediately - pickFact's hard
+    // exclusion of the just-answered Fact does. `random: () => 0` always
+    // picks the heaviest-weighted candidate first, the worst case for a
+    // same-Fact repeat if the exclusion weren't applied.
+    let state = createInitialState({ size: 2 }, deps());
+
+    for (let i = 0; i < 20; i++) {
+      const previous = factKey(state.fact);
+      const wrongAnswer = state.fact.a * state.fact.b + 1000;
+      const result = submitAttempt(state, { type: "attemptSubmitted", answer: wrongAnswer, responseTimeMs: 1000 }, deps());
+      state = result.state;
+      expect(factKey(state.fact)).not.toBe(previous);
+    }
+  });
+
+  it("falls back to redrawing the same Fact when the Active range has only one", () => {
+    const state = createInitialState({ size: 1 }, deps());
+
+    const result = submitAttempt(state, { type: "attemptSubmitted", answer: 99, responseTimeMs: 1000 }, deps());
+
+    expect(result.state.fact).toEqual({ a: 1, b: 1 });
+  });
+
   it("seeds Fluency with the response time on a Fact's first correct Attempt", () => {
     const state = createInitialState({ size: 1 }, deps());
 
@@ -346,8 +374,14 @@ describe("submitAttempt", () => {
   });
 
   it("blends subsequent correct Attempts into Fluency as a recency-weighted average", () => {
+    // Pin the Fact after the first Attempt: size 1's lone Fact gets
+    // Mastered by that Attempt and expands the range, and pickFact now
+    // hard-excludes whichever Fact was just answered from the next draw -
+    // so without pinning, the second Attempt below would land on a
+    // different Fact than "1x1".
+    const fact = { a: 1, b: 1 };
     let state = createInitialState({ size: 1 }, deps());
-    state = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 1000 }, deps()).state;
+    state = { ...submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 1000 }, deps()).state, fact };
 
     const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 2000 }, deps());
 
@@ -376,8 +410,11 @@ describe("submitAttempt", () => {
   });
 
   it("celebrates personal-best when beating the Fluency baseline (plus typing allowance)", () => {
+    // Pin the Fact after the first Attempt - see the comment in "blends
+    // subsequent correct Attempts..." above.
+    const fact = { a: 1, b: 1 };
     let state = createInitialState({ size: 1 }, deps());
-    state = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 1000 }, deps()).state;
+    state = { ...submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 1000 }, deps()).state, fact };
 
     const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 500 }, deps());
 
@@ -385,8 +422,11 @@ describe("submitAttempt", () => {
   });
 
   it("celebrates correctness-only, not personal-best, when not beating the baseline", () => {
+    // Pin the Fact after the first Attempt - see the comment in "blends
+    // subsequent correct Attempts..." above.
+    const fact = { a: 1, b: 1 };
     let state = createInitialState({ size: 1 }, deps());
-    state = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 1000 }, deps()).state;
+    state = { ...submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 1000 }, deps()).state, fact };
 
     const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 1500 }, deps());
 
@@ -398,12 +438,14 @@ describe("submitAttempt", () => {
     // pushed the *current* Fluency to 1000 + 2*50 = 1100ms, so an identical
     // 1000ms response is now a personal best - it wasn't one against the
     // raw, undecayed average.
+    // Pin the Fact after the first Attempt - see the comment in "blends
+    // subsequent correct Attempts..." above.
+    const fact = { a: 1, b: 1 };
     let state = createInitialState({ size: 1 }, deps({ now: () => 0 }));
-    state = submitAttempt(
-      state,
-      { type: "attemptSubmitted", answer: 1, responseTimeMs: 1000 },
-      deps({ now: () => 0 }),
-    ).state;
+    state = {
+      ...submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 1000 }, deps({ now: () => 0 })).state,
+      fact,
+    };
 
     const result = submitAttempt(
       state,
@@ -433,12 +475,14 @@ describe("submitAttempt", () => {
   });
 
   it("still counts a wrong Attempt as practice for decay purposes, without changing the average", () => {
+    // Pin the Fact after the first Attempt - see the comment in "blends
+    // subsequent correct Attempts..." above.
+    const fact = { a: 1, b: 1 };
     let state = createInitialState({ size: 1 }, deps({ now: () => 0 }));
-    state = submitAttempt(
-      state,
-      { type: "attemptSubmitted", answer: 1, responseTimeMs: 1000 },
-      deps({ now: () => 0 }),
-    ).state;
+    state = {
+      ...submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 1000 }, deps({ now: () => 0 })).state,
+      fact,
+    };
 
     const result = submitAttempt(
       state,
@@ -573,8 +617,11 @@ describe("submitAttempt", () => {
     });
 
     it("blends Accuracy as a recency-weighted average, mirroring Fluency's EMA weighting", () => {
+      // Pin the Fact after the first Attempt - see the comment in "blends
+      // subsequent correct Attempts..." (outside the Accuracy describe block).
+      const fact = { a: 1, b: 1 };
       let state = createInitialState({ size: 1 }, deps());
-      state = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 }, deps()).state; // correct
+      state = { ...submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 }, deps()).state, fact }; // correct
 
       const result = submitAttempt(state, { type: "attemptSubmitted", answer: -1, responseTimeMs: 800 }, deps()); // wrong
 
@@ -584,9 +631,12 @@ describe("submitAttempt", () => {
     });
 
     it("keeps a lifetime Attempt count that only ever grows, across both correct and wrong Attempts", () => {
+      // Pin the Fact after each Attempt - see the comment in "blends
+      // subsequent correct Attempts..." (outside the Accuracy describe block).
+      const fact = { a: 1, b: 1 };
       let state = createInitialState({ size: 1 }, deps());
-      state = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 }, deps()).state;
-      state = submitAttempt(state, { type: "attemptSubmitted", answer: -1, responseTimeMs: 800 }, deps()).state;
+      state = { ...submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 }, deps()).state, fact };
+      state = { ...submitAttempt(state, { type: "attemptSubmitted", answer: -1, responseTimeMs: 800 }, deps()).state, fact };
 
       const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 }, deps());
 
