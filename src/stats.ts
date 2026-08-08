@@ -7,8 +7,7 @@
 import {
   currentFluencyMs,
   factKey,
-  TARGET_SPEED_MS,
-  typingAllowanceMs,
+  factTargetMs,
   type AccuracyRecord,
   type EngineState,
   type Fact,
@@ -41,16 +40,12 @@ export function accuracyBucket(correctShare: number): RampBucket {
 // personal typing allowance (CONTEXT.md) - the same target isMastered
 // compares against, so fluencyRatio's 1.0 boundary lines up exactly with
 // the Mastered line (ticket #12's central requirement).
-export function fluencyTargetMs(fact: Fact): number {
-  return TARGET_SPEED_MS + typingAllowanceMs(fact.a * fact.b);
-}
-
 // currentFluencyMs / target - the DECAYED value, so the Fluency grid can
 // never disagree with isMastered or the Progress map about what "fast"
 // means (ticket #12: "so the grid and the Progress map indicator can
 // never disagree").
 export function fluencyRatio(fact: Fact, fluency: FluencyRecord | undefined, now: number): number {
-  return currentFluencyMs(fluency, now) / fluencyTargetMs(fact);
+  return currentFluencyMs(fluency, now) / factTargetMs(fact);
 }
 
 // Ticket #12's Fluency buckets: <0.6, 0.6-0.8, 0.8-1.0 || 1.0-1.5, >1.5.

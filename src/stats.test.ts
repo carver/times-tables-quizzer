@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { TARGET_SPEED_MS, typingAllowanceMs, type AccuracyRecord, type EngineState, type FluencyRecord } from "./engine/engine";
+import {
+  factTargetMs,
+  TARGET_SPEED_MS,
+  typingAllowanceMs,
+  type AccuracyRecord,
+  type EngineState,
+  type FluencyRecord,
+} from "./engine/engine";
 import {
   accuracyBucket,
   classifyAccuracyCell,
@@ -7,10 +14,9 @@ import {
   factTooltipText,
   fluencyBucket,
   fluencyRatio,
-  fluencyTargetMs,
 } from "./stats";
 
-const FACT = { a: 7, b: 8 }; // product 56, single-digit typing allowance (2 digits -> +300ms)
+const FACT = { a: 7, b: 8 }; // product 56 - two digits, so one typing allowance on its target
 
 function stateWith(overrides: {
   activeRangeSize?: number;
@@ -50,13 +56,13 @@ describe("accuracyBucket", () => {
   });
 });
 
-describe("fluencyTargetMs / fluencyRatio", () => {
+describe("factTargetMs / fluencyRatio", () => {
   it("adds the Fact's own typing allowance to the fixed target speed", () => {
-    expect(fluencyTargetMs(FACT)).toBe(TARGET_SPEED_MS + typingAllowanceMs(56));
+    expect(factTargetMs(FACT)).toBe(TARGET_SPEED_MS + typingAllowanceMs(56));
   });
 
   it("uses the decayed currentFluencyMs, not the raw stored average", () => {
-    const target = fluencyTargetMs(FACT);
+    const target = factTargetMs(FACT);
     const DAY_MS = 86_400_000;
     // Stored average sits well under target, but the record is 10 days
     // stale - decay (50ms/day, engine.ts) should push the ratio up from
@@ -72,7 +78,7 @@ describe("fluencyTargetMs / fluencyRatio", () => {
 
   it("treats an unattempted Fact as UNATTEMPTED_WEIGHT_MS, same as the engine's own selection weight", () => {
     const ratio = fluencyRatio(FACT, undefined, 0);
-    expect(ratio).toBeCloseTo(5000 / fluencyTargetMs(FACT), 10);
+    expect(ratio).toBeCloseTo(5000 / factTargetMs(FACT), 10);
   });
 });
 
@@ -147,7 +153,7 @@ describe("classifyAccuracyCell / classifyFluencyCell", () => {
   });
 
   it("lands a Fact sitting at exactly ratio 1.0 in Fluency bucket 1, matching the target-speed boundary", () => {
-    const target = fluencyTargetMs(FACT);
+    const target = factTargetMs(FACT);
     const state = stateWith({
       accuracy: { "7x8": { correctShare: 1, attemptCount: 5 } },
       fluency: { "7x8": { averageResponseMs: target, lastAttemptAt: 0 } },

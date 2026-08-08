@@ -1,0 +1,11 @@
+# Weight selection by the squared Fluency ratio, and damp Facts already practiced today
+
+Fact selection is weighted random, favouring Facts the Learner is slower on. The original weight was simply the Fact's current Fluency in milliseconds. In real use that turned out to spend most of a session on Facts the Learner had already mastered: with a 5 × 5 Active range holding 23 fluent Facts around 1.2s and 2 stubborn ones around 5s, **73% of questions went to the 23 already-fluent Facts**. Nothing was wrong with the arithmetic — many small weights simply outvote a few large ones, and a linear weight can't express "much more often" strongly enough to overcome a 23-to-2 headcount.
+
+Weight is now the Fact's current Fluency expressed as a multiple of *its own* target (the fixed target speed plus that Fact's typing allowance), squared. Normalising against the target is what makes the exponent meaningful — 1.0 is "at the bar", and it's the same ratio the Fluency grid buckets by, so the two never disagree about what "off the pace" means. Squaring moves the same scenario to **50%** on already-fluent Facts.
+
+On top of that, a Fact that is **Mastered and has already been practiced today** has its weight damped to a quarter. Once the Learner has cycled through the range, that takes the same scenario down to **18%** on fluent Facts, which gives a session a natural arc: warm up across everything, then concentrate on what's actually weak. It needs no new saved state — `lastAttemptAt` on the Fluency record already says what was practiced today.
+
+The damper deliberately isn't an exclusion. "Don't show a fluent Fact again until tomorrow" was the obvious version and was rejected: the Active range expands at 90% Mastered, so precisely when the Learner is closest to progressing, excluding every fluent Fact they've seen collapses the pool to two or three Facts and drills them back to back — the predictable, demoralising pattern that weighted-random selection exists to avoid in the first place. Damping keeps the long tail alive, which is also what keeps a mastered Fact from being quietly forgotten within a session.
+
+Both numbers are tuning knobs, not principles. If practice still feels too generous to the easy Facts, raising the exponent is the first dial to turn — it sharpens the whole curve, where the damper only affects Facts already practiced today.

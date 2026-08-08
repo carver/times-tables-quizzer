@@ -117,11 +117,12 @@ const BOOST_ATTEMPTS = 5;
 // single Attempt dominate the average.
 const RECENCY_WEIGHT = 0.3;
 
-// Extra allowance (ms) added to a response-time comparison target for
-// each digit beyond the first, so multi-digit answers (e.g. "144") aren't
-// held to the same bar as single-digit ones (e.g. "6") purely because
-// they take longer to type, not longer to recall.
-const PER_DIGIT_ALLOWANCE_MS = 300;
+// Extra allowance (ms) added to the progression target for each digit
+// beyond the first, so multi-digit answers (e.g. "144") aren't held to
+// the same bar as single-digit ones (e.g. "6") purely because they take
+// longer to type, not longer to recall. Raised from 300ms after watching
+// a nine-year-old actually use the keypad.
+const PER_DIGIT_ALLOWANCE_MS = 500;
 
 export function typingAllowanceMs(answer: number): number {
   const digitCount = Math.abs(answer).toString().length;
@@ -138,17 +139,65 @@ export function currentFluencyMs(record: FluencyRecord | undefined, now: number)
   return record ? record.averageResponseMs + DECAY_MS_PER_DAY * ((now - record.lastAttemptAt) / MS_PER_DAY) : UNATTEMPTED_WEIGHT_MS;
 }
 
-export function computeWeight(fact: Fact, state: Pick<EngineState, "fluency" | "boosted">, now: number): number {
+// How sharply selection favours the Facts the Learner is slowest on.
+// Weight is the Fact's Fluency expressed as a multiple of its own target
+// (see factTargetMs) raised to this power. At 1 - which is effectively
+// what weighting by raw milliseconds did - a range with 23 fluent Facts
+// and 2 stubborn ones sent 73% of questions to Facts already fluent,
+// because 23 small weights outnumber 2 large ones. Squaring pulls that
+// to 50%, and the same-day damper below takes it to 18%. See ADR 0005.
+const WEIGHT_EXPONENT = 2;
+
+// Additional damping for a Mastered Fact that has already been practiced
+// today. Keeps a session from spending its back half re-asking Facts the
+// Learner has already demonstrated today, without ever excluding them:
+// a hard "not again until tomorrow" rule collapses the pool to a handful
+// of Facts exactly when the range is near 90% Mastered, and drilling the
+// same two Facts back to back is the predictable, demoralizing pattern
+// the weighted-random design exists to avoid.
+const SAME_DAY_MASTERED_DAMPER = 0.25;
+
+// The response-time bar this Fact is held to: the fixed automaticity
+// target (the same recall bar for every Fact, ADR 0001) plus its own
+// typing allowance. Shared by the progression check and by selection
+// weighting, so "how far off the pace is this Fact" means one thing.
+export function factTargetMs(fact: Fact): number {
+  return TARGET_SPEED_MS + typingAllowanceMs(fact.a * fact.b);
+}
+
+function practicedOn(record: FluencyRecord | undefined, now: number): boolean {
+  return record !== undefined && dayKey(record.lastAttemptAt) === dayKey(now);
+}
+
+export function computeWeight(
+  fact: Fact,
+  state: Pick<EngineState, "fluency" | "boosted" | "needsRedemption">,
+  now: number,
+): number {
   const key = factKey(fact);
-  const baseWeight = currentFluencyMs(state.fluency[key], now);
+  const record = state.fluency[key];
+
+  // Fluency as a multiple of this Fact's own target: below 1 is at or
+  // past the bar, above 1 is behind it. Normalizing here (rather than
+  // weighting by raw milliseconds) is what makes the exponent meaningful
+  // - it's the same ratio the Fluency grid buckets by.
+  const ratio = currentFluencyMs(record, now) / factTargetMs(fact);
+  let weight = Math.pow(ratio, WEIGHT_EXPONENT);
+
+  if (practicedOn(record, now) && isMastered(fact, state, now)) {
+    weight *= SAME_DAY_MASTERED_DAMPER;
+  }
 
   const remainingBoost = state.boosted[key] ?? 0;
-  return remainingBoost > 0 ? baseWeight * BOOST_WEIGHT_MULTIPLIER : baseWeight;
+  return remainingBoost > 0 ? weight * BOOST_WEIGHT_MULTIPLIER : weight;
 }
 
 // The fixed automaticity bar for progression (ADR 0001) - the same for
 // every Fact, unlike the celebration baseline which is personal per Fact.
-export const TARGET_SPEED_MS = 2_000;
+// Raised from 2000ms: the clock starts when the prompt renders, so it is
+// paying for reading the Fact, recalling it, tapping the digits, and
+// pressing Enter - and 2s proved a tight bar for a nine-year-old.
+export const TARGET_SPEED_MS = 2_500;
 
 // Share of the Active range that must be Mastered before it expands.
 export const MASTERY_THRESHOLD = 0.9;
@@ -163,8 +212,7 @@ export const MAX_ACTIVE_RANGE_SIZE = 12;
 export function isMastered(fact: Fact, state: Pick<EngineState, "fluency" | "needsRedemption">, now: number): boolean {
   if (state.needsRedemption[factKey(fact)]) return false;
 
-  const target = TARGET_SPEED_MS + typingAllowanceMs(fact.a * fact.b);
-  return currentFluencyMs(state.fluency[factKey(fact)], now) < target;
+  return currentFluencyMs(state.fluency[factKey(fact)], now) < factTargetMs(fact);
 }
 
 export function nextActiveRange(
@@ -304,7 +352,10 @@ export type Dependencies = {
   now: () => number;
 };
 
-function pickFact(state: Pick<EngineState, "activeRange" | "fluency" | "boosted">, deps: Dependencies): Fact {
+function pickFact(
+  state: Pick<EngineState, "activeRange" | "fluency" | "boosted" | "needsRedemption">,
+  deps: Dependencies,
+): Fact {
   const facts = listFacts(state.activeRange);
   const now = deps.now();
   const weights = facts.map((fact) => computeWeight(fact, state, now));
@@ -384,7 +435,14 @@ export function submitAttempt(
   if (correct) {
     const previous = fluency[key];
     const baselineMs = currentFluencyMs(previous, now);
-    const beatsBaseline = previous !== undefined && event.responseTimeMs < baselineMs + typingAllowanceMs(event.answer);
+    // No typing allowance here, deliberately. This compares a Fact
+    // against its own past times, so the typing is identical on both
+    // sides and cancels - adding the allowance was pure slack, handing
+    // out "personal best" for answers *slower* than the Learner's own
+    // average by the whole allowance. The allowance belongs on the
+    // progression target, where it compares different Facts to a shared
+    // bar and the digit count genuinely differs.
+    const beatsBaseline = previous !== undefined && event.responseTimeMs < baselineMs;
     celebrations.push(celebration(beatsBaseline ? "personal-best" : "correctness-only"));
 
     fluency[key] = {

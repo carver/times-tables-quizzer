@@ -49,5 +49,5 @@ A Streak count that's a multiple of 7, triggering an escalated celebration beyon
 _Avoid_: Badge, achievement
 
 **Typing allowance**:
-A fixed amount of extra time added to a response-time comparison target for each digit beyond the first in the correct answer, so a Fact with a multi-digit product (e.g. "144") isn't held to the same bar as a single-digit one (e.g. "6") purely for taking longer to type. Applied to both the celebration baseline and the progression target — never to the stored Fluency average itself.
+A fixed amount of extra time added to the progression target for each digit beyond the first in the correct answer, so a Fact with a multi-digit product (e.g. "144") isn't held to the same bar as a single-digit one (e.g. "6") purely for taking longer to type. Applies only where Facts with different digit counts are measured against a shared bar — never to the stored Fluency average, and never to the personal-best comparison, where a Fact is measured against its own history and the typing is identical on both sides.
 _Avoid_: Padding, buffer

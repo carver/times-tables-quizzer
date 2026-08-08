@@ -3,6 +3,8 @@ import {
   advanceStreak,
   computeWeight,
   createInitialState,
+  factKey,
+  factTargetMs,
   isMastered,
   listFacts,
   NEW_STREAK,
@@ -141,8 +143,8 @@ describe("typingAllowanceMs", () => {
   });
 
   it("gives more allowance for each extra digit", () => {
-    expect(typingAllowanceMs(56)).toBe(300);
-    expect(typingAllowanceMs(144)).toBe(600);
+    expect(typingAllowanceMs(56)).toBe(500);
+    expect(typingAllowanceMs(144)).toBe(1000);
   });
 });
 
@@ -165,7 +167,7 @@ describe("isMastered", () => {
   });
 
   it("applies the per-digit typing allowance to the target for multi-digit products", () => {
-    const fact = { a: 7, b: 8 }; // product 56, 2 digits => +300ms allowance
+    const fact = { a: 7, b: 8 }; // product 56, 2 digits => +500ms allowance
     const state = { fluency: { "7x8": { averageResponseMs: TARGET_SPEED_MS + 200, lastAttemptAt: 0 } }, needsRedemption: {} };
     expect(isMastered(fact, state, 0)).toBe(true);
   });
@@ -210,32 +212,72 @@ describe("nextActiveRange", () => {
 });
 
 describe("computeWeight", () => {
-  it("weights a never-attempted Fact at the unattempted sentinel", () => {
-    const fact = { a: 3, b: 4 };
-    const state = { fluency: {}, boosted: {} };
+  const FACT = { a: 3, b: 4 }; // two-digit product, so one typing allowance
+  const TARGET = factTargetMs(FACT);
+  const EMPTY = { fluency: {}, boosted: {}, needsRedemption: {} };
 
-    expect(computeWeight(fact, state, 0)).toBe(UNATTEMPTED_WEIGHT_MS);
+  function stateWith(averageResponseMs: number, lastAttemptAt: number, extra: object = {}) {
+    return { ...EMPTY, fluency: { "3x4": { averageResponseMs, lastAttemptAt } }, ...extra };
+  }
+
+  it("weighs a Fact sitting exactly on its own target at 1", () => {
+    // Weight is Fluency as a multiple of the Fact's own target, so 1 is
+    // the natural unit - right at the bar. Everything else reads against it.
+    expect(computeWeight(FACT, stateWith(TARGET, 0), 0)).toBeCloseTo(1, 10);
   });
 
-  it("weights an attempted Fact at its stored average when queried at the same instant", () => {
-    const fact = { a: 3, b: 4 };
-    const state = { fluency: { "3x4": { averageResponseMs: 1200, lastAttemptAt: 0 } }, boosted: {} };
+  it("squares the ratio, so a Fact twice off the pace outweighs one at the bar fourfold", () => {
+    // Weighting by raw milliseconds sent 73% of questions to Facts the
+    // Learner was already fluent on, because many small weights outvote
+    // a few large ones. Squaring is what fixes that.
+    const atTarget = computeWeight(FACT, stateWith(TARGET, 0), 0);
+    const twiceOff = computeWeight(FACT, stateWith(2 * TARGET, 0), 0);
 
-    expect(computeWeight(fact, state, 0)).toBe(1200);
+    expect(twiceOff / atTarget).toBeCloseTo(4, 10);
   });
 
-  it("decays the weight upward the longer a Fact has gone unpracticed, independent of new Attempts", () => {
-    const fact = { a: 3, b: 4 };
-    const state = { fluency: { "3x4": { averageResponseMs: 1000, lastAttemptAt: 0 } }, boosted: {} };
+  it("weights a never-attempted Fact from the unattempted sentinel", () => {
+    expect(computeWeight(FACT, EMPTY, 0)).toBeCloseTo((UNATTEMPTED_WEIGHT_MS / TARGET) ** 2, 10);
+  });
 
-    expect(computeWeight(fact, state, 2 * DAY_MS)).toBe(1100);
+  it("decays the weight upward the longer a Fact has gone unpracticed", () => {
+    const fresh = computeWeight(FACT, stateWith(1000, 0), 0);
+    const stale = computeWeight(FACT, stateWith(1000, 0), 30 * DAY_MS);
+
+    expect(stale).toBeGreaterThan(fresh);
+  });
+
+  it("damps a Mastered Fact already practiced today, without dropping it from the pool", () => {
+    // Excluding it outright until tomorrow would collapse the pool to a
+    // handful of Facts exactly when the range is near 90% Mastered.
+    // Damping keeps the long tail, so nothing is quietly forgotten.
+    const practicedToday = computeWeight(FACT, stateWith(1000, 0), 0);
+    const practicedYesterday = computeWeight(FACT, stateWith(1000, -DAY_MS), 0);
+
+    expect(practicedToday).toBeGreaterThan(0);
+    expect(practicedToday).toBeLessThan(practicedYesterday);
+  });
+
+  it("does not damp a Fact practiced today that is not Mastered", () => {
+    // Slow today means it still needs the practice. The damper is only
+    // for Facts the Learner has already demonstrated today.
+    const slow = 3 * TARGET;
+
+    expect(computeWeight(FACT, stateWith(slow, 0), 0)).toBeCloseTo((slow / TARGET) ** 2, 10);
+  });
+
+  it("does not damp a fast Fact practiced today that still owes redemption", () => {
+    const owing = stateWith(1000, 0, { needsRedemption: { "3x4": true } });
+    const redeemed = stateWith(1000, 0);
+
+    expect(computeWeight(FACT, owing, 0)).toBeGreaterThan(computeWeight(FACT, redeemed, 0));
   });
 
   it("multiplies the weight while the Fact is boosted", () => {
-    const fact = { a: 3, b: 4 };
-    const state = { fluency: { "3x4": { averageResponseMs: 1000, lastAttemptAt: 0 } }, boosted: { "3x4": 3 } };
+    const plain = stateWith(3 * TARGET, 0);
+    const boosted = stateWith(3 * TARGET, 0, { boosted: { "3x4": 3 } });
 
-    expect(computeWeight(fact, state, 0)).toBe(4000);
+    expect(computeWeight(FACT, boosted, 0) / computeWeight(FACT, plain, 0)).toBeCloseTo(4, 10);
   });
 });
 
@@ -372,18 +414,22 @@ describe("submitAttempt", () => {
     expect(result.celebrations).toEqual([{ kind: "personal-best", tag: "inline" }]);
   });
 
-  it("applies the per-digit typing allowance to the personal-best comparison", () => {
-    // Fact { a: 7, b: 8 } => answer 56, a 2-digit answer => 300ms allowance.
+  it("gives no typing-allowance slack to the personal-best comparison", () => {
+    // This compares a Fact against its own past times, so the typing is
+    // identical on both sides and cancels. Adding the allowance here was
+    // pure slack - it celebrated answers *slower* than the Learner's own
+    // average, which only got worse as the allowance grew.
     // Pin the Fact after each step (range size 8 has many Facts, and
     // weighted selection would otherwise move on to a different one).
     const fact = { a: 7, b: 8 };
     let state: EngineState = { ...createInitialState({ size: 8 }, deps()), fact };
     state = { ...submitAttempt(state, { type: "attemptSubmitted", answer: 56, responseTimeMs: 1000 }, deps()).state, fact };
 
-    // 1250ms is slower than the 1000ms baseline, but within the 300ms allowance.
-    const result = submitAttempt(state, { type: "attemptSubmitted", answer: 56, responseTimeMs: 1250 }, deps());
+    const slower = submitAttempt(state, { type: "attemptSubmitted", answer: 56, responseTimeMs: 1250 }, deps());
+    expect(slower.celebrations).toEqual([{ kind: "correctness-only", tag: "inline" }]);
 
-    expect(result.celebrations).toEqual([{ kind: "personal-best", tag: "inline" }]);
+    const faster = submitAttempt(state, { type: "attemptSubmitted", answer: 56, responseTimeMs: 900 }, deps());
+    expect(faster.celebrations).toEqual([{ kind: "personal-best", tag: "inline" }]);
   });
 
   it("still counts a wrong Attempt as practice for decay purposes, without changing the average", () => {
@@ -447,7 +493,7 @@ describe("submitAttempt", () => {
         "1x1": { averageResponseMs: 500, lastAttemptAt: 0 },
         "1x2": { averageResponseMs: 500, lastAttemptAt: 0 },
         "2x1": { averageResponseMs: 500, lastAttemptAt: 0 },
-        "2x2": { averageResponseMs: 2500, lastAttemptAt: 0 }, // un-Mastered so the range doesn't expand
+        "2x2": { averageResponseMs: 9000, lastAttemptAt: 0 }, // un-Mastered so the range doesn't expand
       },
       accuracy: {},
       boosted: { "1x2": 3 },
@@ -456,15 +502,22 @@ describe("submitAttempt", () => {
       streak: NEW_STREAK,
       practiceDayCount: 0,
     };
-    // "1x2" is boosted 4x -> weight 2000; total weight = 500 + 2000 + 500 + 2500 = 5500.
-    // "1x2" occupies the cumulative range [500, 2500) out of 5500.
-    const result = submitAttempt(
-      state,
-      { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 },
-      deps({ random: () => 1000 / 5500 }),
-    );
+    // Sweep the whole random range rather than pinning one hand-computed
+    // draw: the claim is that the boost shifts the distribution, and
+    // pinning a single value only restates the weight arithmetic.
+    const picks = new Map<string, number>();
+    for (let i = 0; i < 1_000; i++) {
+      const result = submitAttempt(
+        state,
+        { type: "attemptSubmitted", answer: 1, responseTimeMs: 800 },
+        deps({ random: () => (i + 0.5) / 1_000 }),
+      );
+      const key = factKey(result.state.fact);
+      picks.set(key, (picks.get(key) ?? 0) + 1);
+    }
 
-    expect(result.state.fact).toEqual({ a: 1, b: 2 });
+    // "1x2" and "2x1" carry identical Fluency; only "1x2" is boosted.
+    expect(picks.get("1x2") ?? 0).toBeGreaterThan(picks.get("2x1") ?? 0);
   });
 
   it("expands the Active range mid-flow and makes newly-unlocked Facts selectable", () => {
