@@ -130,11 +130,11 @@ getEl<HTMLDivElement>("app").innerHTML = `
       <section class="stats-section" aria-labelledby="accuracy-heading">
         <h2 class="stats-heading" id="accuracy-heading">Accuracy</h2>
         <ul class="stats-legend">
-          <li><span class="legend-swatch" data-acc="0"></span>&lt;50%</li>
-          <li><span class="legend-swatch" data-acc="1"></span>50–75%</li>
-          <li><span class="legend-swatch" data-acc="2"></span>75–90%</li>
-          <li><span class="legend-swatch" data-acc="3"></span>90–99%</li>
-          <li><span class="legend-swatch" data-acc="4"></span>100%</li>
+          <li><button type="button" class="legend-item" data-tip="Correct less than half of recent Attempts."><span class="legend-swatch" data-acc="0"></span>&lt;50%</button></li>
+          <li><button type="button" class="legend-item" data-tip="Correct 50–75% of recent Attempts."><span class="legend-swatch" data-acc="1"></span>50–75%</button></li>
+          <li><button type="button" class="legend-item" data-tip="Correct 75–90% of recent Attempts."><span class="legend-swatch" data-acc="2"></span>75–90%</button></li>
+          <li><button type="button" class="legend-item" data-tip="Correct 90–99% of recent Attempts."><span class="legend-swatch" data-acc="3"></span>90–99%</button></li>
+          <li><button type="button" class="legend-item" data-tip="Never missed once, ever."><span class="legend-swatch" data-acc="4"></span>100%</button></li>
         </ul>
         <div class="stats-grid-wrap">
           <div class="stats-grid" id="accuracy-grid" role="group" aria-label="Accuracy grid, 12 by 12 Facts"></div>
@@ -144,11 +144,11 @@ getEl<HTMLDivElement>("app").innerHTML = `
       <section class="stats-section" aria-labelledby="fluency-heading">
         <h2 class="stats-heading" id="fluency-heading">Fluency</h2>
         <ul class="stats-legend">
-          <li><span class="legend-swatch" data-fluency="0"></span>&gt;1.5×</li>
-          <li><span class="legend-swatch" data-fluency="1"></span>1.0–1.5×</li>
-          <li><span class="legend-swatch" data-fluency="2"></span>0.8–1.0×</li>
-          <li><span class="legend-swatch" data-fluency="3"></span>0.6–0.8×</li>
-          <li><span class="legend-swatch" data-fluency="4"></span>&lt;0.6×</li>
+          <li><button type="button" class="legend-item" data-tip="Takes over 1.5× this Fact's target time — well behind pace."><span class="legend-swatch" data-fluency="0"></span>&gt;1.5×</button></li>
+          <li><button type="button" class="legend-item" data-tip="Takes 1.0–1.5× the target time — behind pace, not yet Mastered."><span class="legend-swatch" data-fluency="1"></span>1.0–1.5×</button></li>
+          <li><button type="button" class="legend-item" data-tip="At or faster than the target time — Mastered."><span class="legend-swatch" data-fluency="2"></span>0.8–1.0×</button></li>
+          <li><button type="button" class="legend-item" data-tip="Comfortably faster than the target time."><span class="legend-swatch" data-fluency="3"></span>0.6–0.8×</button></li>
+          <li><button type="button" class="legend-item" data-tip="Well under the target time — very fluent."><span class="legend-swatch" data-fluency="4"></span>&lt;0.6×</button></li>
         </ul>
         <div class="stats-grid-wrap">
           <div class="stats-grid" id="fluency-grid" role="group" aria-label="Fluency grid, 12 by 12 Facts"></div>
@@ -156,9 +156,9 @@ getEl<HTMLDivElement>("app").innerHTML = `
       </section>
 
       <ul class="stats-legend stats-legend--shared">
-        <li><span class="legend-swatch legend-swatch--empty"></span>Not tried yet</li>
-        <li><span class="legend-swatch legend-swatch--never-correct"></span>Wrong so far</li>
-        <li><span class="legend-swatch legend-swatch--provisional"></span>Still new</li>
+        <li><button type="button" class="legend-item" data-tip="This Fact hasn't been asked yet."><span class="legend-swatch legend-swatch--empty"></span>Not tried yet</button></li>
+        <li><button type="button" class="legend-item" data-tip="Attempted at least once, but never yet answered correctly."><span class="legend-swatch legend-swatch--never-correct"></span>Wrong so far</button></li>
+        <li><button type="button" class="legend-item" data-tip="Only 1–2 Attempts so far — the color may not be reliable yet."><span class="legend-swatch legend-swatch--provisional"></span>Still new</button></li>
       </ul>
     </div>
 
@@ -692,6 +692,22 @@ muteToggleEl.addEventListener("click", () => {
   setMuted(muted);
   renderMuteToggle();
   persist();
+});
+
+// The stats legend's swatches are static markup (unlike the grids, never
+// rebuilt), so this wiring runs once rather than per-render - each
+// swatch's explanation is baked into its own data-tip rather than looked
+// up, since these don't vary with engine state. Shares the same tooltip
+// element/positioning as the grid cells (showStatsTooltip/hideStatsTooltip
+// above) so a tap anywhere on the stats screen behaves the same way.
+document.querySelectorAll<HTMLButtonElement>(".legend-item").forEach((item) => {
+  const text = item.dataset.tip;
+  if (text === undefined) return;
+  item.addEventListener("pointerenter", () => showStatsTooltip(item, text));
+  item.addEventListener("focus", () => showStatsTooltip(item, text));
+  item.addEventListener("click", () => showStatsTooltip(item, text));
+  item.addEventListener("pointerleave", hideStatsTooltip);
+  item.addEventListener("blur", hideStatsTooltip);
 });
 
 // WebAudio refuses to produce sound until a real user gesture has

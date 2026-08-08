@@ -438,8 +438,23 @@ body {
 
 .stats-legend li {
   display: inline-flex;
+}
+
+/* Tappable/focusable, matching the grid cells' own tap-for-detail
+   pattern (buildStatsGrid) - reset to look like the plain text label the
+   legend used to be, not a button, since the swatch already carries the
+   visual weight. */
+.legend-item {
+  display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
 }
 
 .stats-legend--shared {

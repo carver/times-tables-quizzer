@@ -246,6 +246,21 @@ test.describe("statistics page", () => {
     await expect(tooltip).toContainText("1 × 1");
   });
 
+  test("tapping a legend swatch explains what it means", async ({ page }) => {
+    await seed(page, { masteredCount: 12 });
+    await gotoStats(page);
+
+    const tooltip = page.locator("#stats-tooltip");
+    await expect(tooltip).toHaveAttribute("data-visible", "false");
+
+    await page.locator(".legend-item", { hasText: "100%" }).click();
+    await expect(tooltip).toHaveAttribute("data-visible", "true");
+    await expect(tooltip).toContainText("Never missed");
+
+    await page.locator(".legend-item", { hasText: "Wrong so far" }).click();
+    await expect(tooltip).toContainText("never yet answered correctly");
+  });
+
   test("the header reports days practiced and the Streak, and no Attempt total", async ({ page }) => {
     await seed(page, {
       streak: { count: 4, lastStreakDay: TODAY(), lastActivityDay: TODAY(), missedDays: 0 },
