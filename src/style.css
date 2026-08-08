@@ -596,6 +596,16 @@ body {
   display: flex;
 }
 
+/* The takeover's backdrop is already opaque, but the next Fact must not
+   be readable through it under any circumstance: input is swallowed
+   while a takeover is up, so a Fact glimpsed early only invites the
+   Learner to start typing an answer that goes nowhere. `visibility`
+   rather than `display` so nothing reflows underneath. */
+body[data-takeover="true"] .center,
+body[data-takeover="true"] .keypad {
+  visibility: hidden;
+}
+
 .takeover-content {
   display: flex;
   flex-direction: column;

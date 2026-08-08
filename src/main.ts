@@ -12,7 +12,7 @@ import { createInitialState, MAX_ACTIVE_RANGE_SIZE, type Celebration, type Celeb
 import { loadState, saveState, type AppState } from "./persistence";
 import { computeProgressMapStatus, type ProgressHighWaterMark, type ProgressReadout } from "./progressMap";
 import { decideLanding, hashForRoute, routeFromHash, type Route } from "./route";
-import { createInitialScreen, pressBackspace, pressDigit, pressEnter, type ScreenState } from "./screen";
+import { createInitialScreen, pressBackspace, pressDigit, pressEnter, restartFactTimer, type ScreenState } from "./screen";
 import { classifyAccuracyCell, classifyFluencyCell, factTooltipText, type CellState } from "./stats";
 
 const INITIAL_ACTIVE_RANGE = { size: 5 };
@@ -486,6 +486,11 @@ function syncTakeoverDisplay() {
 
   if (!current) {
     takeoverEl.dataset.visible = "false";
+    document.body.dataset.takeover = "false";
+    // The queue has drained, so the Learner can finally answer. Start
+    // the Fact's timer from here rather than from the Attempt that
+    // raised the takeover - see restartFactTimer in screen.ts.
+    quizState = restartFactTimer(quizState, deps);
     return;
   }
 
@@ -499,6 +504,14 @@ function syncTakeoverDisplay() {
     buildProgressGrid(takeoverGridEl, quizState.engine.activeRange.size, quizState.engine.activeRange.size);
   }
   takeoverEl.dataset.visible = "true";
+  // Belt and braces on top of the takeover's opaque backdrop: the quiz
+  // content underneath is hidden outright while a takeover is up, so the
+  // next Fact can't be read and pre-answered through it. The backdrop
+  // alone already covers it, but that depends on a colour staying
+  // opaque, and this states the intent where a future restyle will see
+  // it. Input is swallowed during a takeover, so a Fact glimpsed early
+  // would only invite typing that goes nowhere.
+  document.body.dataset.takeover = "true";
   playSound(soundForCelebration(current.kind));
 }
 

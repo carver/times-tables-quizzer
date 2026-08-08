@@ -47,6 +47,26 @@ function toAnswering(engine: EngineState, deps: Dependencies): AnsweringScreen {
   return { mode: "answering", engine, typed: "", factShownAt: deps.now() };
 }
 
+// Restarts the current Fact's response timer, discarding however long
+// the Learner has been sitting in front of it so far.
+//
+// This exists for takeover Celebrations. A correct Attempt advances to
+// the next Fact and starts its timer immediately, but if that same
+// Attempt also expanded the Active range or hit a Milestone, a takeover
+// goes up and swallows all input until it's dismissed - so the Learner
+// cannot answer during that window, yet the clock was running through
+// it. Left uncorrected, time spent admiring a celebration is billed to
+// the next Fact's Fluency: a several-second takeover can push an
+// instantly-answered Fact past the target speed, un-Mastering it and
+// making a personal best impossible.
+//
+// A no-op in "correcting" mode, where there is no Attempt being timed -
+// the correction retype isn't one (CONTEXT.md).
+export function restartFactTimer(screen: ScreenState, deps: Dependencies): ScreenState {
+  if (screen.mode !== "answering") return screen;
+  return { ...screen, factShownAt: deps.now() };
+}
+
 // Appends one digit to whatever's currently typed, regardless of mode -
 // the keypad and physical keyboard both feed digits through here whether
 // the Learner is answering or retyping a correction.

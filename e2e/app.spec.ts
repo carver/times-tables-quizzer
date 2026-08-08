@@ -142,6 +142,33 @@ test.describe("takeover Celebrations", () => {
     expect(errors).toEqual([]);
   });
 
+  test("hides the next Fact and does not bill the celebration's duration to it", async ({ page }) => {
+    // Both halves of the same problem: input is swallowed while a
+    // takeover is up, so the next Fact must not be readable through it,
+    // and the clock must not be running on a Fact the Learner has no way
+    // to answer. Before this was fixed, lingering three seconds on a
+    // takeover recorded ~3700ms for an instantly-answered next Fact.
+    await seed(page, { masteredCount: 24, lastMapShownDay: TODAY() });
+    await page.goto("/");
+
+    await answerWithKeypad(page, await promptedAnswer(page));
+    await expect(page.locator("#takeover")).toHaveAttribute("data-visible", "true");
+
+    await expect(page.locator("#center")).toBeHidden();
+    await expect(page.locator("#keypad")).toBeHidden();
+
+    await page.waitForTimeout(3_000);
+    await page.locator("#takeover").click();
+    await expect(page.locator("#center")).toBeVisible();
+
+    const next = await promptedAnswer(page);
+    const key = ((await page.locator("#prompt").textContent()) ?? "").match(/\d+/g)!.slice(0, 2).join("x");
+    await answerWithKeypad(page, next);
+
+    const recorded = (await readSave(page)).fluency[key].averageResponseMs;
+    expect(recorded).toBeLessThan(3_000);
+  });
+
   test("one Attempt that both expands the range and hits a Milestone shows both, expansion first", async ({
     page,
   }) => {

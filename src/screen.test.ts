@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createInitialState, dayKey, type EngineState } from "./engine/engine";
-import { createInitialScreen, pressBackspace, pressDigit, pressEnter, type CorrectingScreen } from "./screen";
+import {
+  createInitialScreen,
+  pressBackspace,
+  pressDigit,
+  pressEnter,
+  restartFactTimer,
+  type CorrectingScreen,
+  type ScreenState,
+} from "./screen";
 
 function deps(overrides: { random?: () => number; now?: () => number } = {}) {
   return { random: overrides.random ?? (() => 0), now: overrides.now ?? (() => 0) };
@@ -178,5 +186,44 @@ describe("pressEnter", () => {
     expect(next).toBe(correctionScreen);
     expect(next.mode).toBe("correcting");
     expect(next.typed).toBe("9");
+  });
+});
+
+describe("restartFactTimer", () => {
+  it("re-stamps the answering Fact's timer, discarding time the Learner couldn't answer in", () => {
+    // The takeover case: a correct Attempt advances to the next Fact and
+    // starts its clock, but a takeover then swallows all input until it's
+    // dismissed. Without this, the celebration's duration is billed to
+    // the next Fact's response time.
+    const screen = createInitialScreen(engineWithSingleFact(), deps({ now: () => 1_000 }));
+    expect(screen.factShownAt).toBe(1_000);
+
+    const resumed = restartFactTimer(screen, deps({ now: () => 9_000 }));
+
+    expect(resumed).toEqual({ ...screen, factShownAt: 9_000 });
+  });
+
+  it("charges only the post-restart time to the Attempt", () => {
+    let clock = 1_000;
+    const d = deps({ now: () => clock });
+    let screen: ScreenState = createInitialScreen(engineWithSingleFact(), d);
+
+    clock = 6_000; // five seconds spent on a takeover, unable to answer
+    screen = restartFactTimer(screen, d);
+
+    clock = 6_400; // answered 400ms after it was actually dismissed
+    screen = pressDigit(screen, "1");
+    const { screen: after } = pressEnter(screen, d);
+
+    expect((after as { engine: EngineState }).engine.fluency["1x1"].averageResponseMs).toBe(400);
+  });
+
+  it("leaves a correction retype alone, which is not a timed Attempt", () => {
+    let screen: ScreenState = createInitialScreen(engineWithSingleFact(), deps());
+    screen = pressDigit(screen, "9");
+    screen = pressEnter(screen, deps()).screen;
+    expect(screen.mode).toBe("correcting");
+
+    expect(restartFactTimer(screen, deps({ now: () => 5_000 }))).toBe(screen);
   });
 });
