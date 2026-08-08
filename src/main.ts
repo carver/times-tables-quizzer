@@ -33,7 +33,11 @@ function dayCount(n: number): string {
 // answer: the prompt shows that continuously in "correcting" mode,
 // underneath, for as long as the retype takes. Takeover Celebrations
 // (below) deliberately have no such timer - see dismissTakeover.
-const CELEBRATION_DISPLAY_MS = 1200;
+// Shortened from 1200ms once the Celebration overlay became opaque: it
+// now genuinely hides the next Fact while it's up, so its duration is
+// dead time in a drill whose whole target is a ~2.5s answer. Any keypress
+// dismisses it early, making this a ceiling rather than a fixed pause.
+const CELEBRATION_DISPLAY_MS = 600;
 const WRONG_ANSWER_FLASH_MS = 900;
 
 function celebrationText(celebration: Celebration, streakCount: number): string {
@@ -429,7 +433,7 @@ function renderQuiz() {
   const { count } = quizState.engine.streak;
   streakEl.textContent = `Streak: ${dayCount(count)}`;
 
-  if (currentTakeover(takeoverQueue)) {
+  if (currentTakeover(takeoverQueue) || factCovered) {
     // Don't put the next Fact in the DOM at all while a takeover is up.
     // The takeover's opaque backdrop and the visibility rule in
     // style.css both already hide it, but each is one CSS feature away
@@ -452,31 +456,53 @@ function renderQuiz() {
   typedAnswerEl.textContent = quizState.typed || " ";
 }
 
+// True while an opaque Celebration overlay is covering the next Fact.
+// The wrong-Attempt flash doesn't set this: it stays translucent, and
+// the prompt beneath it is the correct answer the Learner needs to read.
+let factCovered = false;
+
 // Shows overlay text, optionally auto-fading after `autoHideMs` (omit to
 // leave it up until the next explicit show/hide call).
-function showOverlay(text: string, celebration: string, autoHideMs?: number) {
+function showOverlay(text: string, celebration: string, autoHideMs?: number, coversFact = false) {
   clearTimeout(overlayTimeout);
   overlayEl.textContent = text;
   overlayEl.dataset.visible = "true";
   overlayEl.dataset.celebration = celebration;
+  factCovered = coversFact;
   if (autoHideMs !== undefined) {
-    overlayTimeout = setTimeout(() => {
-      overlayEl.dataset.visible = "false";
-    }, autoHideMs);
+    overlayTimeout = setTimeout(hideOverlay, autoHideMs);
   }
 }
 
 function hideOverlay() {
   clearTimeout(overlayTimeout);
   overlayEl.dataset.visible = "false";
+
+  if (factCovered) {
+    factCovered = false;
+    // The Fact was hidden behind an opaque Celebration, so its clock was
+    // running through a window the Learner couldn't read it in - the same
+    // defect the takeover queue has (see restartFactTimer). Start it from
+    // the moment the Fact actually becomes readable.
+    quizState = restartFactTimer(quizState, deps);
+  }
+  renderQuiz();
 }
 
+// The Learner touching the keypad ends the previous Attempt's overlay
+// immediately, whatever time it had left. The overlay sits on top of the
+// typed answer as well as the prompt, so leaving it up means the digit
+// that was just pressed is washed out along with everything else - which
+// reads as "my typing isn't doing anything" and invites a re-tap. The
+// input was always being accepted; it just wasn't visibly landing.
 function handleDigit(digit: string) {
+  hideOverlay();
   quizState = pressDigit(quizState, digit);
   renderQuiz();
 }
 
 function handleBackspace() {
+  hideOverlay();
   quizState = pressBackspace(quizState);
   renderQuiz();
 }
@@ -495,7 +521,7 @@ function playInlineCelebrations(celebrations: Celebration[], streakCount: number
   for (const c of celebrations) playSound(soundForCelebration(c.kind));
 
   const [primary] = celebrations;
-  showOverlay(celebrationText(primary, streakCount), primary.kind, CELEBRATION_DISPLAY_MS);
+  showOverlay(celebrationText(primary, streakCount), primary.kind, CELEBRATION_DISPLAY_MS, true);
 }
 
 // Renders whichever takeover is now at the front of `takeoverQueue`, or

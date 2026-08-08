@@ -327,3 +327,42 @@ test.describe("the hidden reset screen", () => {
     expect(await readSave(page)).toEqual(before);
   });
 });
+
+test.describe("the inline Celebration overlay", () => {
+  test("hides the next Fact while it is up, and does not charge that time to it", async ({ page }) => {
+    // The overlay used to be translucent, so the next Fact was readable
+    // straight through "Correct!" - and the digits being typed were
+    // washed out along with it, which read as input not registering.
+    await seed(page, { lastMapShownDay: TODAY() });
+    await page.goto("/");
+
+    await answerWithKeypad(page, await promptedAnswer(page));
+
+    const overlay = page.locator("#overlay");
+    await expect(overlay).toHaveAttribute("data-visible", "true");
+    await expect(overlay).toHaveText("Correct!");
+    await expect(page.locator("#prompt")).toHaveText("");
+
+    // Once it clears, the Fact appears and its clock starts from there.
+    await expect(page.locator("#prompt")).toContainText("?", { timeout: 3_000 });
+    const key = ((await page.locator("#prompt").textContent()) ?? "").match(/\d+/g)!.slice(0, 2).join("x");
+    await answerWithKeypad(page, await promptedAnswer(page));
+
+    const recorded = (await readSave(page)).fluency[key].averageResponseMs;
+    expect(recorded).toBeLessThan(1_500);
+  });
+
+  test("a keypress dismisses it at once, so the typed digit is visible immediately", async ({ page }) => {
+    await seed(page, { lastMapShownDay: TODAY() });
+    await page.goto("/");
+
+    await answerWithKeypad(page, await promptedAnswer(page));
+    await expect(page.locator("#overlay")).toHaveAttribute("data-visible", "true");
+
+    await page.click('.key[data-digit="7"]');
+
+    await expect(page.locator("#overlay")).toHaveAttribute("data-visible", "false");
+    await expect(page.locator("#typed-answer")).toHaveText("7");
+    await expect(page.locator("#prompt")).toContainText("?");
+  });
+});
