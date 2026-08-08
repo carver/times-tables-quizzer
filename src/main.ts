@@ -9,7 +9,7 @@ import {
   type TakeoverQueue,
 } from "./celebrationQueue";
 import { createInitialState, MAX_ACTIVE_RANGE_SIZE, type Celebration, type CelebrationKind, type Dependencies, type Fact } from "./engine/engine";
-import { loadState, saveState, type AppState } from "./persistence";
+import { clearState, loadState, saveState, type AppState } from "./persistence";
 import { computeProgressMapStatus, type ProgressHighWaterMark, type ProgressReadout } from "./progressMap";
 import { decideLanding, hashForRoute, routeFromHash, type Route } from "./route";
 import { createInitialScreen, pressBackspace, pressDigit, pressEnter, restartFactTimer, type ScreenState } from "./screen";
@@ -161,6 +161,20 @@ getEl<HTMLDivElement>("app").innerHTML = `
     <div class="stats-tooltip" id="stats-tooltip" role="status" aria-live="polite" data-visible="false"></div>
   </section>
 
+  <!-- The reset screen. Deliberately unlinked from every other screen:
+       reachable only by typing #/reset, and written down only in the
+       README. It's for handing the app over with a clean history, not a
+       feature the Learner should stumble into. -->
+  <section class="screen reset-screen" id="screen-reset">
+    <h2 class="reset-heading">Erase all progress?</h2>
+    <p class="reset-body">
+      This deletes every Fact's history, the Active range, the Streak, and the
+      days-practiced count. It cannot be undone.
+    </p>
+    <button type="button" class="reset-confirm" id="reset-confirm">Erase everything</button>
+    <a class="reset-cancel" id="reset-cancel" href="#/map">Leave it alone</a>
+  </section>
+
   <!-- ticket #13: the takeover for range-expansion and Milestone Celebrations
        (CONTEXT.md's Celebration entry - "fills the screen and waits for the
        Learner to dismiss it"). Lives outside the three routed <section>s -
@@ -197,6 +211,8 @@ const takeoverGridEl = getEl<HTMLDivElement>("takeover-grid");
 const takeoverTitleEl = getEl<HTMLParagraphElement>("takeover-title");
 
 const statsScreenEl = getEl<HTMLElement>("screen-stats");
+const resetScreenEl = getEl<HTMLElement>("screen-reset");
+const resetConfirmEl = getEl<HTMLButtonElement>("reset-confirm");
 const statsDaysEl = getEl<HTMLParagraphElement>("stats-days");
 const statsStreakEl = getEl<HTMLParagraphElement>("stats-streak");
 const accuracyGridEl = getEl<HTMLDivElement>("accuracy-grid");
@@ -413,6 +429,18 @@ function renderQuiz() {
   const { count } = quizState.engine.streak;
   streakEl.textContent = `Streak: ${dayCount(count)}`;
 
+  if (currentTakeover(takeoverQueue)) {
+    // Don't put the next Fact in the DOM at all while a takeover is up.
+    // The takeover's opaque backdrop and the visibility rule in
+    // style.css both already hide it, but each is one CSS feature away
+    // from failing on an older browser, and the consequence of failing
+    // is the Learner reading the next Fact and typing an answer that
+    // gets swallowed. Nothing to render is nothing to leak.
+    promptEl.textContent = "";
+    typedAnswerEl.textContent = " ";
+    return;
+  }
+
   if (quizState.mode === "correcting") {
     // The correct answer is shown outright - the Learner isn't being
     // quizzed again, they're retyping to practice it.
@@ -525,6 +553,10 @@ function dismissTakeover() {
   if (!currentTakeover(takeoverQueue)) return;
   takeoverQueue = dismissCurrentTakeover(takeoverQueue);
   syncTakeoverDisplay();
+  // Paints the Fact that renderQuiz deliberately withheld while the
+  // takeover was up. Runs after syncTakeoverDisplay so that, if another
+  // takeover was queued behind this one, the Fact stays withheld.
+  renderQuiz();
 }
 
 function handleEnter() {
@@ -620,6 +652,15 @@ document.addEventListener("keydown", (keyEvent) => {
   }
 });
 
+// Erases the save and reloads, so every module rebuilds from the
+// genuine first-ever-open path rather than this session's in-memory
+// state being written straight back out by the next persist().
+resetConfirmEl.addEventListener("click", () => {
+  clearState();
+  window.location.hash = hashForRoute("map");
+  window.location.reload();
+});
+
 muteToggleEl.addEventListener("click", () => {
   muted = !muted;
   setMuted(muted);
@@ -646,6 +687,7 @@ function applyRoute(route: Route) {
   mapScreenEl.dataset.active = String(route === "map");
   quizScreenEl.dataset.active = String(route === "quiz");
   statsScreenEl.dataset.active = String(route === "stats");
+  resetScreenEl.dataset.active = String(route === "reset");
   // A tooltip anchored to a now-hidden cell would otherwise stay stuck
   // on screen after navigating away.
   hideStatsTooltip();
@@ -661,7 +703,7 @@ window.addEventListener("hashchange", () => applyRoute(routeFromHash(window.loca
 // each calendar day, straight to the quiz on later opens the same day.
 // Reuses the engine's dayKey (via decideLanding) rather than a second
 // notion of "day".
-const landing = decideLanding(lastMapShownDay, deps.now());
+const landing = decideLanding(lastMapShownDay, deps.now(), routeFromHash(window.location.hash));
 if (landing.shownOnDay !== undefined) {
   lastMapShownDay = landing.shownOnDay;
   persist();

@@ -105,6 +105,15 @@ export function saveState(state: AppState): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
 }
 
+// Erases every trace of the Learner's progress. Reached only from the
+// unlinked reset screen (route.ts's RESET_ROUTE), which exists so the
+// app can be handed over with a clean history. Removing the key outright
+// - rather than writing a fresh state - means the next load takes the
+// genuine first-ever-open path, Progress map and all.
+export function clearState(): void {
+  localStorage.removeItem(STORAGE_KEY);
+}
+
 export function loadState(): AppState | null {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw === null) return null;

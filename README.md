@@ -22,6 +22,18 @@ Everything is local to the browser — no backend, no login. Progress lives in `
 | `npm run test:e2e` | browser tests (Playwright, builds first) |
 | `npm run test:all` | both suites |
 
+## Erasing all progress
+
+Add **`#/reset`** to the URL:
+
+```
+https://carver.github.io/times-tables-quizzer/#/reset
+```
+
+That screen asks to confirm, then deletes every fact's history, the active range, the streak, and the days-practiced count. The app restarts as if opened for the first time.
+
+It is linked from nowhere in the app and is only written down here — so you can hand a device over with a clean history without a reset button sitting where a nine-year-old will find it after a bad run. Progress is stored per browser, so each browser (and a private window) has its own.
+
 ## How it works
 
 Three screens. The **Progress map** is home — a 12 × 12 grid with the conquered corner filled, shown on the first open of each day. The **quiz** is a prompt and a keypad. The **statistics** page has two grids, one for accuracy and one for fluency, darker meaning better.

@@ -67,8 +67,16 @@ export async function seed(page: Page, overrides: Seed = {}): Promise<void> {
     version: SAVE_VERSION,
   };
 
+  // Seeds exactly once per browser context, not on every load. An
+  // unguarded init script re-writes the save after any reload the app
+  // performs itself - which would silently defeat a spec that reloads to
+  // check something was persisted, or erased.
   await page.addInitScript(
-    ([key, value]) => window.localStorage.setItem(key as string, value as string),
+    ([key, value]) => {
+      if (window.sessionStorage.getItem("e2e-seeded")) return;
+      window.sessionStorage.setItem("e2e-seeded", "1");
+      window.localStorage.setItem(key as string, value as string);
+    },
     [STORAGE_KEY, JSON.stringify(state)] as const,
   );
 }

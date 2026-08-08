@@ -156,6 +156,9 @@ test.describe("takeover Celebrations", () => {
 
     await expect(page.locator("#center")).toBeHidden();
     await expect(page.locator("#keypad")).toBeHidden();
+    // Not merely hidden by CSS - the Fact is not in the DOM at all, so
+    // no styling failure on an older browser can leak it.
+    await expect(page.locator("#prompt")).toHaveText("");
 
     await page.waitForTimeout(3_000);
     await page.locator("#takeover").click();
@@ -269,5 +272,58 @@ test.describe("sound preference", () => {
     // A same-day reload lands on the quiz, so reach the map to see the toggle.
     await page.click("#map-link");
     await expect(page.locator("#mute-toggle")).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+test.describe("the hidden reset screen", () => {
+  test("is reachable only by typing its hash, and is linked from nowhere", async ({ page }) => {
+    await seed(page, { masteredCount: 12, lastMapShownDay: TODAY() });
+    await page.goto("/");
+
+    // Nothing anywhere in the app points at it.
+    await expect(page.locator('a[href="#/reset"]')).toHaveCount(0);
+
+    // And the landing rule doesn't redirect it away on a cold open,
+    // which is the only way it is ever opened.
+    await page.goto("/#/reset");
+    await expect(page.locator("#screen-reset")).toHaveAttribute("data-active", "true");
+  });
+
+  test("erases every trace of progress and returns to a first-ever-open state", async ({ page }) => {
+    await seed(page, {
+      masteredCount: 20,
+      lastMapShownDay: TODAY(),
+      streak: { count: 9, lastStreakDay: TODAY(), lastActivityDay: TODAY(), missedDays: 0 },
+    });
+    await page.goto("/#/reset");
+
+    await page.click("#reset-confirm");
+
+    // Back to the map, because the erased save takes the genuine
+    // first-ever-open path rather than a same-day return.
+    await expect(page).toHaveURL(/#\/map$/);
+    await expect(page.locator("#screen-map")).toHaveAttribute("data-active", "true");
+    await expect(page.locator("#map-streak")).toContainText("0 days");
+
+    // Nothing of the old Learner survives. (A save exists again by now -
+    // landing on the map records today as lastMapShownDay - but it is a
+    // fresh one.)
+    const after = await readSave(page);
+    expect(after.fluency).toEqual({});
+    expect(after.accuracy).toEqual({});
+    expect(after.streak.count).toBe(0);
+    expect(after.practiceDayCount).toBe(0);
+    expect(after.activeRange.size).toBe(5);
+  });
+
+  test("leaves progress untouched if the Learner backs out", async ({ page }) => {
+    await seed(page, { masteredCount: 20, lastMapShownDay: TODAY() });
+    await page.goto("/#/reset");
+    const before = await readSave(page);
+
+    await page.click("#reset-cancel");
+
+    await expect(page.locator("#screen-map")).toHaveAttribute("data-active", "true");
+    expect(await readSave(page)).toEqual(before);
   });
 });

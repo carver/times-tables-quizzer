@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { dayKey } from "./engine/engine";
 import { decideLanding, hashForRoute, routeFromHash } from "./route";
 
 const DAY_MS = 86_400_000;
@@ -54,5 +55,26 @@ describe("decideLanding", () => {
     const decision = decideLanding("2026-01-01", day(0) + 5000);
 
     expect(decision.shownOnDay).toBeUndefined();
+  });
+});
+
+describe("the reset route", () => {
+  it("round-trips through its hash like any other route", () => {
+    expect(routeFromHash("#/reset")).toBe("reset");
+    expect(hashForRoute("reset")).toBe("#/reset");
+  });
+
+  it("survives the landing rule instead of being redirected away", () => {
+    // Every other route gets overridden on load by the map-or-quiz
+    // landing decision. The reset screen is reachable only by typing its
+    // hash, so redirecting it would make it unreachable on a cold open -
+    // which is the only way anyone ever opens it.
+    expect(decideLanding(null, day(0), "reset").route).toBe("reset");
+    expect(decideLanding(dayKey(day(0)), day(0), "reset").route).toBe("reset");
+  });
+
+  it("still applies the landing rule to every other requested route", () => {
+    expect(decideLanding(null, day(0), "stats").route).toBe("map");
+    expect(decideLanding(dayKey(day(0)), day(0), "stats").route).toBe("quiz");
   });
 });
