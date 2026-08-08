@@ -65,7 +65,11 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      # enablement: true turns Pages on for the repo on first run, so
+      # this doesn't need a human to flip the setting by hand first.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
