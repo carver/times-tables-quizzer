@@ -1,4 +1,13 @@
 import "./style.css";
+import { initAudio, playSound, setMuted, type SoundKind } from "./audio";
+import {
+  currentTakeover,
+  dismissCurrentTakeover,
+  EMPTY_TAKEOVER_QUEUE,
+  enqueueTakeovers,
+  inlineCelebrations,
+  type TakeoverQueue,
+} from "./celebrationQueue";
 import { createInitialState, MAX_ACTIVE_RANGE_SIZE, type Celebration, type CelebrationKind, type Dependencies, type Fact } from "./engine/engine";
 import { loadState, saveState, type AppState } from "./persistence";
 import { computeProgressMapStatus, type ProgressHighWaterMark, type ProgressReadout } from "./progressMap";
@@ -16,30 +25,16 @@ function dayCount(n: number): string {
   return `${n} day${n === 1 ? "" : "s"}`;
 }
 
-// How long the overlay stays up before fading on its own. Neither of
-// these gates progress - the Celebration overlay is purely cosmetic
-// (the next Fact is already live underneath it), and the wrong-Attempt
-// overlay is a brief "not quite" flash, not the mechanism that shows the
-// correct answer: the prompt shows that continuously in "correcting"
-// mode, underneath, for as long as the retype takes.
+// How long the inline-celebration overlay stays up before fading on its
+// own, and how long the plain wrong-Attempt flash stays up. Neither of
+// these gates progress - the inline overlay is purely cosmetic (the next
+// Fact is already live underneath it), and the wrong-Attempt overlay is a
+// brief "not quite" flash, not the mechanism that shows the correct
+// answer: the prompt shows that continuously in "correcting" mode,
+// underneath, for as long as the retype takes. Takeover Celebrations
+// (below) deliberately have no such timer - see dismissTakeover.
 const CELEBRATION_DISPLAY_MS = 1200;
 const WRONG_ANSWER_FLASH_MS = 900;
-
-// An Attempt can produce several Celebrations at once (ticket #10); this
-// picks the single most-significant one to headline the overlay text
-// with. Takeover-tagged kinds (rarer, bigger moments) always outrank
-// inline ones. The actual takeover screen - filling the display and
-// waiting for a dismissal, rather than this auto-fading overlay - is
-// ticket #13's job; this is a minimal, coherent stand-in until then.
-const CELEBRATION_PRIORITY: CelebrationKind[] = ["range-expansion", "milestone", "personal-best", "correctness-only"];
-
-function primaryCelebration(celebrations: Celebration[]): Celebration | undefined {
-  for (const kind of CELEBRATION_PRIORITY) {
-    const found = celebrations.find((c) => c.kind === kind);
-    if (found) return found;
-  }
-  return undefined;
-}
 
 function celebrationText(celebration: Celebration, streakCount: number): string {
   switch (celebration.kind) {
@@ -54,6 +49,24 @@ function celebrationText(celebration: Celebration, streakCount: number): string 
   }
 }
 
+// The issue's feedback-matrix table maps each Celebration kind to exactly
+// one sound - kept as its own lookup (rather than folded into
+// celebrationText) since audio and overlay/takeover text are triggered at
+// different moments for a takeover (queued vs. shown - see
+// syncTakeoverDisplay).
+function soundForCelebration(kind: CelebrationKind): SoundKind {
+  switch (kind) {
+    case "correctness-only":
+      return "correct";
+    case "personal-best":
+      return "personal-best";
+    case "range-expansion":
+      return "range-expansion";
+    case "milestone":
+      return "milestone";
+  }
+}
+
 function getEl<T extends HTMLElement>(id: string): T {
   return document.querySelector<T>(`#${id}`)!;
 }
@@ -61,6 +74,7 @@ function getEl<T extends HTMLElement>(id: string): T {
 getEl<HTMLDivElement>("app").innerHTML = `
   <section class="screen map-screen" id="screen-map">
     <header class="map-header">
+      <button type="button" class="mute-toggle" id="mute-toggle" aria-pressed="false"></button>
       <p class="streak" id="map-streak"></p>
     </header>
 
@@ -146,12 +160,30 @@ getEl<HTMLDivElement>("app").innerHTML = `
 
     <div class="stats-tooltip" id="stats-tooltip" role="status" aria-live="polite" data-visible="false"></div>
   </section>
+
+  <!-- ticket #13: the takeover for range-expansion and Milestone Celebrations
+       (CONTEXT.md's Celebration entry - "fills the screen and waits for the
+       Learner to dismiss it"). Lives outside the three routed <section>s -
+       data-visible, not the route, controls whether it's shown, since it
+       can cover whichever screen the Learner was on when the Attempt
+       landed (always the quiz screen in practice). -->
+  <div class="takeover" id="takeover" data-visible="false" data-kind="" role="dialog" aria-modal="true" aria-live="assertive">
+    <div class="takeover-content">
+      <div class="takeover-grid-wrap" id="takeover-grid-wrap">
+        <div class="progress-grid takeover-grid" id="takeover-grid" role="img" aria-label="Active range grid"></div>
+      </div>
+      <p class="takeover-title" id="takeover-title"></p>
+      <p class="takeover-hint">Tap anywhere to continue</p>
+    </div>
+  </div>
 `;
 
 const mapScreenEl = getEl<HTMLElement>("screen-map");
 const mapStreakEl = getEl<HTMLParagraphElement>("map-streak");
 const progressGridEl = getEl<HTMLDivElement>("progress-grid");
 const progressReadoutEl = getEl<HTMLParagraphElement>("progress-readout");
+const muteToggleEl = getEl<HTMLButtonElement>("mute-toggle");
+const practiceLinkEl = getEl<HTMLAnchorElement>("practice-link");
 
 const quizScreenEl = getEl<HTMLElement>("screen-quiz");
 const streakEl = getEl<HTMLParagraphElement>("streak");
@@ -160,6 +192,10 @@ const typedAnswerEl = getEl<HTMLParagraphElement>("typed-answer");
 const overlayEl = getEl<HTMLParagraphElement>("overlay");
 const keypadEl = getEl<HTMLElement>("keypad");
 
+const takeoverEl = getEl<HTMLDivElement>("takeover");
+const takeoverGridEl = getEl<HTMLDivElement>("takeover-grid");
+const takeoverTitleEl = getEl<HTMLParagraphElement>("takeover-title");
+
 const statsScreenEl = getEl<HTMLElement>("screen-stats");
 const statsDaysEl = getEl<HTMLParagraphElement>("stats-days");
 const statsStreakEl = getEl<HTMLParagraphElement>("stats-streak");
@@ -167,10 +203,21 @@ const accuracyGridEl = getEl<HTMLDivElement>("accuracy-grid");
 const speedGridEl = getEl<HTMLDivElement>("speed-grid");
 const statsTooltipEl = getEl<HTMLDivElement>("stats-tooltip");
 
-const loaded: AppState = loadState() ?? { engine: createInitialState(INITIAL_ACTIVE_RANGE, deps), lastMapShownDay: null };
+const loaded: AppState = loadState() ?? { engine: createInitialState(INITIAL_ACTIVE_RANGE, deps), lastMapShownDay: null, muted: false };
 let quizState: ScreenState = createInitialScreen(loaded.engine, deps);
 let lastMapShownDay = loaded.lastMapShownDay;
+let muted = loaded.muted;
+setMuted(muted);
 let overlayTimeout: ReturnType<typeof setTimeout> | undefined;
+
+// The queue of takeover-tagged Celebrations waiting to be shown
+// (celebrationQueue.ts) plus which one, if any, is currently rendered
+// into the takeover DOM - held separately so syncTakeoverDisplay can tell
+// "still the same takeover, don't re-show/re-play it" apart from "a new
+// one just became current" purely by reference equality, without a
+// second identity scheme.
+let takeoverQueue: TakeoverQueue = EMPTY_TAKEOVER_QUEUE;
+let displayedTakeover: Celebration | undefined;
 
 // The Progress map's progress-to-expansion readout is monotonic within a
 // session (ticket #11) - this is that session's high-water mark, held in
@@ -179,11 +226,21 @@ let overlayTimeout: ReturnType<typeof setTimeout> | undefined;
 let progressHighWaterMark: ProgressHighWaterMark | null = null;
 
 function persist() {
-  saveState({ engine: quizState.engine, lastMapShownDay });
+  saveState({ engine: quizState.engine, lastMapShownDay, muted });
 }
 
-function renderProgressGrid(activeRangeSize: number) {
-  progressGridEl.innerHTML = "";
+// Builds one 12x12 grid of cells - shared by the Progress map's own grid
+// and, unchanged, by the range-expansion takeover below (ticket #13:
+// "reuse the Progress map's 12x12 grid rendering rather than inventing a
+// second grid visual" / ADR 0004's one-shared-grid-shape precedent).
+// `newSize`, when given, is the range size an expansion just reached -
+// the newly filled row (a === newSize) and column (b === newSize) get
+// `grid-cell--new` so CSS can animate them filling in, staggered via
+// `--reveal-delay` in the order the takeover fills them: across the new
+// row first, then down the new column.
+function buildProgressGrid(container: HTMLDivElement, activeRangeSize: number, newSize?: number) {
+  container.innerHTML = "";
+  let newCellIndex = 0;
   for (let a = 1; a <= MAX_ACTIVE_RANGE_SIZE; a++) {
     for (let b = 1; b <= MAX_ACTIVE_RANGE_SIZE; b++) {
       const cell = document.createElement("div");
@@ -195,9 +252,18 @@ function renderProgressGrid(activeRangeSize: number) {
       if (a <= activeRangeSize && b <= activeRangeSize) {
         cell.classList.add("grid-cell--filled");
       }
-      progressGridEl.appendChild(cell);
+      if (newSize !== undefined && a <= newSize && b <= newSize && (a === newSize || b === newSize)) {
+        cell.classList.add("grid-cell--new");
+        cell.style.setProperty("--reveal-delay", `${newCellIndex * 25}ms`);
+        newCellIndex++;
+      }
+      container.appendChild(cell);
     }
   }
+}
+
+function renderProgressGrid(activeRangeSize: number) {
+  buildProgressGrid(progressGridEl, activeRangeSize);
 }
 
 function progressReadoutText(readout: ProgressReadout): string {
@@ -209,10 +275,21 @@ function progressReadoutText(readout: ProgressReadout): string {
   }
 }
 
+// The mute toggle (ticket #13: "the toggle lives on the Progress map
+// only, never on the quiz screen - a mute button within reach of a
+// fast-tapping thumb gets hit by accident"). Rendered wherever `muted`
+// can change - on the initial map render and right after the button's
+// own click - rather than only once at startup.
+function renderMuteToggle() {
+  muteToggleEl.textContent = muted ? "🔇 Sound off" : "🔊 Sound on";
+  muteToggleEl.setAttribute("aria-pressed", String(muted));
+}
+
 function renderMap() {
   const { engine } = quizState;
   const { count } = engine.streak;
   mapStreakEl.textContent = `Streak: ${dayCount(count)}`;
+  renderMuteToggle();
 
   renderProgressGrid(engine.activeRange.size);
 
@@ -376,24 +453,65 @@ function handleBackspace() {
   renderQuiz();
 }
 
-// Shows the most-significant Celebration from the set, if any; used by
-// both the "correct" and "incorrect" outcomes below since a wrong
-// Attempt can still carry one (e.g. a Milestone - Streak advances on
-// every Attempt regardless of correctness). Returns whether it showed
-// one, so callers can fall back to their own default overlay when not.
-function showPrimaryCelebration(celebrations: Celebration[], streakCount: number): boolean {
-  const primary = primaryCelebration(celebrations);
-  if (!primary) return false;
+// Plays and shows every inline Celebration from the set at once - "plays
+// simultaneously" per CONTEXT.md, which for the sounds means literally
+// overlapping playSound calls, and for the overlay means the first (in
+// practice the only - engine.ts pushes exactly one of correctness-only /
+// personal-best per Attempt, never both) heads the on-screen text. A
+// future inline kind that fires alongside another would still get its
+// own sound from the loop below even though only one gets the overlay
+// text - sound is never silently dropped, only the headline text picks
+// one.
+function playInlineCelebrations(celebrations: Celebration[], streakCount: number) {
+  if (celebrations.length === 0) return;
+  for (const c of celebrations) playSound(soundForCelebration(c.kind));
 
-  showOverlay(
-    celebrationText(primary, streakCount),
-    primary.kind,
-    // Inline celebrations auto-fade quickly so they never block the next
-    // Attempt; takeover ones stay up until the next overlay call replaces
-    // them (a placeholder for #13's real dismiss flow).
-    primary.tag === "inline" ? CELEBRATION_DISPLAY_MS : undefined,
-  );
-  return true;
+  const [primary] = celebrations;
+  showOverlay(celebrationText(primary, streakCount), primary.kind, CELEBRATION_DISPLAY_MS);
+}
+
+// Renders whichever takeover is now at the front of `takeoverQueue`, or
+// hides the takeover entirely once the queue drains - and does nothing at
+// all if the front of the queue hasn't actually changed since last call,
+// so re-running this after every enqueue/dismiss never re-triggers the
+// sound or restarts the reveal animation for a takeover already on
+// screen. This is the only place a takeover's sound plays - deliberately
+// at display time, not at the moment the underlying Attempt happened, so
+// two queued takeovers each get their own sound in turn rather than both
+// firing at once up front.
+function syncTakeoverDisplay() {
+  const current = currentTakeover(takeoverQueue);
+  if (current === displayedTakeover) return;
+  displayedTakeover = current;
+
+  if (!current) {
+    takeoverEl.dataset.visible = "false";
+    return;
+  }
+
+  takeoverEl.dataset.kind = current.kind;
+  takeoverTitleEl.textContent = celebrationText(current, quizState.engine.streak.count);
+  if (current.kind === "range-expansion") {
+    // The engine only ever grows the Active range by one step at a time
+    // (nextActiveRange), so the just-reached size IS the newly-filled
+    // row/column - no need to have captured the pre-expansion size
+    // separately.
+    buildProgressGrid(takeoverGridEl, quizState.engine.activeRange.size, quizState.engine.activeRange.size);
+  }
+  takeoverEl.dataset.visible = "true";
+  playSound(soundForCelebration(current.kind));
+}
+
+// The Learner's tap (or Enter/Space from a keyboard - see the keydown
+// handler below) advancing past the current takeover. Never on a timer:
+// the issue is explicit that auto-dismiss risks the Learner missing the
+// best moment in the app by looking away at the wrong instant, and that
+// two takeovers queued back to back (range-expansion then Milestone) is
+// correct behavior a timer would only get in the way of.
+function dismissTakeover() {
+  if (!currentTakeover(takeoverQueue)) return;
+  takeoverQueue = dismissCurrentTakeover(takeoverQueue);
+  syncTakeoverDisplay();
 }
 
 function handleEnter() {
@@ -405,18 +523,29 @@ function handleEnter() {
       return;
     case "correct":
       persist();
-      showPrimaryCelebration(outcome.celebrations, quizState.engine.streak.count);
+      playInlineCelebrations(inlineCelebrations(outcome.celebrations), quizState.engine.streak.count);
+      takeoverQueue = enqueueTakeovers(takeoverQueue, outcome.celebrations);
+      syncTakeoverDisplay();
       break;
     case "incorrect":
       persist();
-      if (!showPrimaryCelebration(outcome.celebrations, quizState.engine.streak.count)) {
-        // A brief flash, not a persistent cover: the correct answer itself
-        // is shown by renderQuiz() in the prompt for the whole "correcting"
-        // mode, so the overlay must not sit on top of it for the duration
-        // of the retype - that would hide the very thing the Learner is
-        // meant to read and copy.
-        showOverlay("Not quite — type the answer to continue", "none", WRONG_ANSWER_FLASH_MS);
-      }
+      // The wrong-answer sound: a soft low tone, never a buzzer (the
+      // issue's central commitment - the Learner is nine). Plays every
+      // time, independent of whether this Attempt also carries a
+      // takeover Celebration (e.g. a Milestone can complete on a wrong
+      // Attempt - Streak advances regardless of correctness).
+      playSound("wrong");
+      // A brief flash, not a persistent cover: the correct answer itself
+      // is shown by renderQuiz() in the prompt for the whole "correcting"
+      // mode, so the overlay must not sit on top of it for the duration
+      // of the retype - that would hide the very thing the Learner is
+      // meant to read and copy. No inline Celebrations are ever produced
+      // by an incorrect outcome (engine.ts only pushes correctness-only /
+      // personal-best on the correct path), so this never competes with
+      // playInlineCelebrations' overlay.
+      showOverlay("Not quite — type the answer to continue", "none", WRONG_ANSWER_FLASH_MS);
+      takeoverQueue = enqueueTakeovers(takeoverQueue, outcome.celebrations);
+      syncTakeoverDisplay();
       break;
     case "correction-dismissed":
       hideOverlay();
@@ -444,11 +573,27 @@ keypadEl.addEventListener("click", (clickEvent) => {
   }
 });
 
+takeoverEl.addEventListener("click", dismissTakeover);
+
 // The physical keyboard keeps working - it costs almost nothing to wire
-// up and it's how this screen gets tested. Guarded to the quiz route so
-// typing on the map or stats screen (e.g. tabbing through and hitting
-// digits by accident) can't submit an Attempt no one asked for.
+// up and it's how this screen gets tested. A visible takeover intercepts
+// Enter/Space as its own dismissal first (and swallows every other key)
+// so a Learner tabbing/typing through a takeover can never leak input
+// through to the quiz underneath - the whole point of "takeovers require
+// a tap to dismiss and never auto-advance" is that nothing else can move
+// the Attempt along while one is up. Below that, key handling is guarded
+// to the quiz route so typing on the map or stats screen (e.g. tabbing
+// through and hitting digits by accident) can't submit an Attempt no one
+// asked for.
 document.addEventListener("keydown", (keyEvent) => {
+  if (takeoverEl.dataset.visible === "true") {
+    if (keyEvent.key === "Enter" || keyEvent.key === " ") {
+      keyEvent.preventDefault();
+      dismissTakeover();
+    }
+    return;
+  }
+
   if (routeFromHash(window.location.hash) !== "quiz") return;
 
   if (/^[0-9]$/.test(keyEvent.key)) {
@@ -461,6 +606,25 @@ document.addEventListener("keydown", (keyEvent) => {
     handleBackspace();
   }
 });
+
+muteToggleEl.addEventListener("click", () => {
+  muted = !muted;
+  setMuted(muted);
+  renderMuteToggle();
+  persist();
+});
+
+// WebAudio refuses to produce sound until a real user gesture has
+// touched the AudioContext (CONTEXT.md-adjacent browser rule, not a
+// domain one) - tapping "Practice" on the Progress map is the gesture
+// the landing flow supplies for free (the issue body), but a same-day
+// return visit skips the map entirely (route.ts's decideLanding sends it
+// straight to the quiz), so the very first pointerdown/keydown anywhere
+// is wired up too as a fallback gesture. initAudio() is idempotent, so
+// having multiple listeners race to call it first is harmless.
+practiceLinkEl.addEventListener("click", () => initAudio(), { once: true });
+document.addEventListener("pointerdown", () => initAudio(), { once: true });
+document.addEventListener("keydown", () => initAudio(), { once: true });
 
 // Hash routing between the map, quiz, and stats screens (route.ts) -
 // deliberately just toggling which <section> is visible off of

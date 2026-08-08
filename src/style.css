@@ -174,13 +174,21 @@ body {
   opacity: 1;
 }
 
+/* Ticket #13's "Correct" row: the answer flashes green - inline, quick,
+   never blocking the next Attempt (only range-expansion and Milestone
+   take over the screen; see .takeover below). */
+.overlay[data-celebration="correctness-only"] {
+  color: #16a34a;
+}
+
 .overlay[data-celebration="personal-best"] {
   color: #d97706;
 }
 
-.overlay[data-celebration="milestone"] {
-  color: #7c3aed;
-  font-size: 2rem;
+/* "Inline sparkle on the answer" (ticket #13) - a static glyph, not an
+   animation, so it needs nothing extra under prefers-reduced-motion. */
+.overlay[data-celebration="personal-best"]::after {
+  content: " ✨";
 }
 
 /* Zone 3: the keypad, anchored to the bottom of the viewport and taking
@@ -243,7 +251,30 @@ body {
 }
 
 .map-header {
+  position: relative;
   flex: 0 0 auto;
+  width: 100%;
+}
+
+/* Ticket #13: mute lives here and ONLY here - never on the quiz screen,
+   where a fast-tapping thumb would hit it by accident. Quiet by design,
+   same reasoning as .map-link on the quiz header: it's a utility control,
+   not something competing with Practice for attention. */
+.mute-toggle {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  color: CanvasText;
+  opacity: 0.6;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.mute-toggle:active {
+  opacity: 0.9;
 }
 
 /* Positioning context for .progress-readout's frontier placement below -
@@ -539,4 +570,128 @@ body {
 
 .stats-tooltip[data-visible="true"] {
   opacity: 1;
+}
+
+/* Ticket #13's takeover: fills the screen and waits for a tap, for
+   range-expansion and Milestone Celebrations (CONTEXT.md's Celebration
+   entry). Fixed and outside the .screen/[data-active] system on purpose -
+   it covers whichever screen was showing (always the quiz screen in
+   practice) rather than being scoped to one, since main.ts blocks quiz
+   input for as long as this is up regardless of route. */
+.takeover {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: color-mix(in srgb, black 92%, Canvas 8%);
+  color: white;
+  text-align: center;
+  cursor: pointer;
+}
+
+.takeover[data-visible="true"] {
+  display: flex;
+}
+
+.takeover-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  max-width: 360px;
+  animation: takeover-in 0.25s ease-out;
+}
+
+@keyframes takeover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.takeover-grid-wrap {
+  width: min(70vw, 280px);
+}
+
+/* .grid-cell's own border (style.css, .progress-grid section) is
+   color-mix'd from CanvasText, which resolves near-black in a light OS
+   theme - fine against the map screen's light Canvas background, but
+   invisible against .takeover's own hardcoded-dark backdrop above.
+   Overridden here, scoped to the takeover only, with a fixed white-based
+   border so the un-filled cells of the reused grid stay visible
+   regardless of the Learner's OS color scheme. */
+.takeover-grid .grid-cell {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* Milestone gets no grid (only range-expansion shows the new row/column
+   filling in) - main.ts never populates #takeover-grid for it, and this
+   just keeps the empty wrapper from reserving blank space. */
+.takeover[data-kind="milestone"] .takeover-grid-wrap {
+  display: none;
+}
+
+.takeover-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+}
+
+.takeover[data-kind="range-expansion"] .takeover-title {
+  color: #93c5fd;
+}
+
+.takeover[data-kind="milestone"] .takeover-title {
+  color: #c4b5fd;
+}
+
+.takeover-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* The new row/column filling in on the reused Progress-map grid (ticket
+   #13: "reuse the Progress map's 12x12 grid rendering rather than
+   inventing a second grid visual"). `--reveal-delay` is set per cell in
+   main.ts's buildProgressGrid, staggering the reveal across the new row
+   then down the new column so it reads as filling in rather than
+   appearing all at once. */
+.grid-cell--new {
+  animation: grid-cell-reveal 0.4s ease-out both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+@keyframes grid-cell-reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* prefers-reduced-motion (ticket #13, explicit requirement): the
+   takeover itself still appears/disappears (that's a visibility change,
+   not motion), but the entrance scale and the staggered grid reveal -
+   the two actual animations here - are removed. The new cells still end
+   up filled, just without the stagger. */
+@media (prefers-reduced-motion: reduce) {
+  .takeover-content {
+    animation: none;
+  }
+  .grid-cell--new {
+    animation: none;
+  }
 }

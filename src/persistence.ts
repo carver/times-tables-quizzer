@@ -15,17 +15,24 @@ const STORAGE_KEY = "times-tables-quizzer:state";
 // brand-new save; the count undercounts once for whoever upgrades mid-
 // history, which is an acceptable one-time cost for a figure nothing
 // upstream of this ticket ever needed to track.
-export const CURRENT_SAVE_VERSION = 3;
+// Version 4 (ticket #13) adds `muted` - the Progress map's mute toggle
+// (the issue: "audio defaults on, with a mute toggle that persists in the
+// save file"). A save from before this version has never had the toggle
+// touched, so it defaults to false (unmuted) - the same default a
+// brand-new save gets.
+export const CURRENT_SAVE_VERSION = 4;
 
 // What the rest of the app actually works with: the engine's state plus
-// the one piece of routing state (CONTEXT.md's Progress map landing
-// rule) that isn't part of the engine's own domain.
+// the two pieces of app-level (not engine-domain) state that ride the
+// same save file - the Progress map landing rule's day marker (ticket
+// #11) and the audio mute toggle (ticket #13).
 export type AppState = {
   engine: EngineState;
   lastMapShownDay: DayKey | null;
+  muted: boolean;
 };
 
-type PersistedState = EngineState & { lastMapShownDay: DayKey | null; version: number };
+type PersistedState = EngineState & { lastMapShownDay: DayKey | null; muted: boolean; version: number };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -55,10 +62,11 @@ function hasCoreEngineShape(value: Record<string, unknown>): boolean {
 // written, rather than discarding the whole save over a partial schema
 // mismatch. Sources of "missing fields" so far: saves written before
 // ticket #10 (no `accuracy`, `needsRedemption`, `rangeHistory`), saves
-// written before ticket #11 (no `lastMapShownDay`), and saves written
-// before ticket #12 (no `practiceDayCount`) - but the shape of this
-// function - keep the core fields, default the new ones - is what a
-// future version bump extends rather than replaces.
+// written before ticket #11 (no `lastMapShownDay`), saves written before
+// ticket #12 (no `practiceDayCount`), and saves written before ticket #13
+// (no `muted`) - but the shape of this function - keep the core fields,
+// default the new ones - is what a future version bump extends rather
+// than replaces.
 function migrate(value: Record<string, unknown>): PersistedState | null {
   if (!hasCoreEngineShape(value)) return null;
 
@@ -78,12 +86,22 @@ function migrate(value: Record<string, unknown>): PersistedState | null {
     // value defaults to "never" - the same as a save that predates this
     // field entirely.
     lastMapShownDay: typeof value.lastMapShownDay === "string" ? (value.lastMapShownDay as DayKey) : null,
+    // Audio defaults on (the issue's explicit commitment) - an
+    // absent/malformed value means either a save that predates the toggle
+    // or a corrupted flag, and both should fall back to unmuted rather
+    // than the fail-silent-and-confusing alternative.
+    muted: typeof value.muted === "boolean" ? value.muted : false,
     version: CURRENT_SAVE_VERSION,
   };
 }
 
 export function saveState(state: AppState): void {
-  const persisted: PersistedState = { ...state.engine, lastMapShownDay: state.lastMapShownDay, version: CURRENT_SAVE_VERSION };
+  const persisted: PersistedState = {
+    ...state.engine,
+    lastMapShownDay: state.lastMapShownDay,
+    muted: state.muted,
+    version: CURRENT_SAVE_VERSION,
+  };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
 }
 
@@ -100,8 +118,8 @@ export function loadState(): AppState | null {
 
     // `version` only exists to drive migrate() above - EngineState itself
     // carries no version field, so it's stripped back off here.
-    const { version: _version, lastMapShownDay, ...engine } = migrated;
-    return { engine, lastMapShownDay };
+    const { version: _version, lastMapShownDay, muted, ...engine } = migrated;
+    return { engine, lastMapShownDay, muted };
   } catch {
     return null;
   }

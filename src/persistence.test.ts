@@ -43,23 +43,23 @@ const fullEngineState: EngineState = {
   practiceDayCount: 7,
 };
 
-const fullAppState: AppState = { engine: fullEngineState, lastMapShownDay: "2026-08-07" };
+const fullAppState: AppState = { engine: fullEngineState, lastMapShownDay: "2026-08-07", muted: true };
 
 describe("saveState / loadState round trip", () => {
   it("returns null when nothing has been saved", () => {
     expect(loadState()).toBeNull();
   });
 
-  it("loads back exactly what was saved, including the fields added by ticket #10, #11's lastMapShownDay, and #12's practiceDayCount", () => {
+  it("loads back exactly what was saved, including the fields added by ticket #10, #11's lastMapShownDay, #12's practiceDayCount, and #13's muted", () => {
     saveState(fullAppState);
 
     expect(loadState()).toEqual(fullAppState);
   });
 
   it("round-trips a null lastMapShownDay (never shown yet)", () => {
-    saveState({ engine: fullEngineState, lastMapShownDay: null });
+    saveState({ engine: fullEngineState, lastMapShownDay: null, muted: false });
 
-    expect(loadState()).toEqual({ engine: fullEngineState, lastMapShownDay: null });
+    expect(loadState()).toEqual({ engine: fullEngineState, lastMapShownDay: null, muted: false });
   });
 
   it("stamps the saved payload with the current version", () => {
@@ -95,6 +95,7 @@ describe("migration", () => {
         practiceDayCount: 0,
       },
       lastMapShownDay: null,
+      muted: false,
     });
   });
 
@@ -121,7 +122,7 @@ describe("migration", () => {
 
     const loaded = loadState();
 
-    expect(loaded).toEqual({ engine: { ...preTicket11Save, practiceDayCount: 0 }, lastMapShownDay: null });
+    expect(loaded).toEqual({ engine: { ...preTicket11Save, practiceDayCount: 0 }, lastMapShownDay: null, muted: false });
   });
 
   // Simulates a save written before ticket #12 - has lastMapShownDay but
@@ -134,6 +135,26 @@ describe("migration", () => {
     const loaded = loadState();
 
     expect(loaded?.engine.practiceDayCount).toBe(0);
+  });
+
+  // Simulates a save written before ticket #13 - has practiceDayCount but
+  // predates the mute toggle entirely.
+  const preTicket13Save = { ...preTicket12Save, practiceDayCount: 4 };
+
+  it("defaults muted to false (unmuted) for a save that predates the toggle - audio defaults on", () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(preTicket13Save));
+
+    const loaded = loadState();
+
+    expect(loaded?.muted).toBe(false);
+  });
+
+  it("round-trips a true muted flag from a save that already has it", () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...preTicket13Save, muted: true }));
+
+    const loaded = loadState();
+
+    expect(loaded?.muted).toBe(true);
   });
 
   it("discards a save missing core (pre-ticket-#10) fields rather than half-migrating it", () => {
