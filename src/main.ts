@@ -104,15 +104,15 @@ getEl<HTMLDivElement>("app").innerHTML = `
     </section>
 
     <section class="keypad" id="keypad" aria-label="Answer keypad">
-      <button type="button" class="key" data-digit="7">7</button>
-      <button type="button" class="key" data-digit="8">8</button>
-      <button type="button" class="key" data-digit="9">9</button>
-      <button type="button" class="key" data-digit="4">4</button>
-      <button type="button" class="key" data-digit="5">5</button>
-      <button type="button" class="key" data-digit="6">6</button>
       <button type="button" class="key" data-digit="1">1</button>
       <button type="button" class="key" data-digit="2">2</button>
       <button type="button" class="key" data-digit="3">3</button>
+      <button type="button" class="key" data-digit="4">4</button>
+      <button type="button" class="key" data-digit="5">5</button>
+      <button type="button" class="key" data-digit="6">6</button>
+      <button type="button" class="key" data-digit="7">7</button>
+      <button type="button" class="key" data-digit="8">8</button>
+      <button type="button" class="key" data-digit="9">9</button>
       <button type="button" class="key key-backspace" id="key-backspace" aria-label="Backspace">⌫</button>
       <button type="button" class="key" data-digit="0">0</button>
       <button type="button" class="key key-enter" id="key-enter" aria-label="Enter">⏎</button>
