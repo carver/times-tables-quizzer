@@ -1,0 +1,96 @@
+import type { Page } from "@playwright/test";
+
+export const STORAGE_KEY = "times-tables-quizzer:state";
+
+// Mirrors persistence.ts's CURRENT_SAVE_VERSION. Deliberately duplicated
+// rather than imported: these specs drive the built app as a black box,
+// and a seed that silently tracked a source constant would stop
+// exercising the migration path the moment that constant moved.
+export const SAVE_VERSION = 4;
+
+// The engine's local-calendar day key (engine.ts's dayKey). Reimplemented
+// here for the same black-box reason - and because a seed built from UTC
+// would land on the wrong day for anyone running these west of Greenwich.
+export function dayKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export const TODAY = () => dayKey(new Date());
+export const YESTERDAY = () => dayKey(new Date(Date.now() - 86_400_000));
+
+type Seed = {
+  masteredCount?: number;
+  activeRangeSize?: number;
+  fact?: { a: number; b: number };
+  streak?: { count: number; lastStreakDay: string | null; lastActivityDay: string | null; missedDays: number };
+  lastMapShownDay?: string | null;
+  muted?: boolean;
+};
+
+// Writes a save before any page script runs, so the app boots from it.
+// `masteredCount` Facts get a fast, freshly-practiced Fluency record,
+// which is what makes range expansion reachable in a single Attempt.
+export async function seed(page: Page, overrides: Seed = {}): Promise<void> {
+  const now = Date.now();
+  const size = overrides.activeRangeSize ?? 5;
+  const mastered = overrides.masteredCount ?? 0;
+
+  const fluency: Record<string, unknown> = {};
+  const accuracy: Record<string, unknown> = {};
+  let placed = 0;
+  outer: for (let a = 1; a <= size; a++) {
+    for (let b = 1; b <= size; b++) {
+      if (placed >= mastered) break outer;
+      placed++;
+      fluency[`${a}x${b}`] = { averageResponseMs: 500, lastAttemptAt: now };
+      accuracy[`${a}x${b}`] = { correctShare: 1, attemptCount: 10 };
+    }
+  }
+
+  const state = {
+    activeRange: { size },
+    // Defaults to the last Fact in the range, which the loop above never
+    // marks Mastered - so the Attempt a spec drives is always a real one.
+    fact: overrides.fact ?? { a: size, b: size },
+    fluency,
+    accuracy,
+    boosted: {},
+    needsRedemption: {},
+    rangeHistory: { [size]: now },
+    practiceDayCount: 3,
+    streak: overrides.streak ?? { count: 0, lastStreakDay: null, lastActivityDay: null, missedDays: 0 },
+    lastMapShownDay: overrides.lastMapShownDay ?? null,
+    muted: overrides.muted ?? false,
+    version: SAVE_VERSION,
+  };
+
+  await page.addInitScript(
+    ([key, value]) => window.localStorage.setItem(key as string, value as string),
+    [STORAGE_KEY, JSON.stringify(state)] as const,
+  );
+}
+
+export async function readSave(page: Page): Promise<Record<string, any>> {
+  const raw = await page.evaluate((key) => window.localStorage.getItem(key), STORAGE_KEY);
+  if (raw === null) throw new Error("no save present");
+  return JSON.parse(raw);
+}
+
+// Types the digits of `answer` on the on-screen keypad and presses Enter.
+export async function answerWithKeypad(page: Page, answer: number): Promise<void> {
+  for (const digit of String(answer)) {
+    await page.click(`.key[data-digit="${digit}"]`);
+  }
+  await page.click(".key-enter");
+}
+
+// The product the prompt is currently asking for, read off the screen so
+// specs never have to predict which Fact the weighted selection picks.
+export async function promptedAnswer(page: Page): Promise<number> {
+  const text = (await page.locator("#prompt").textContent()) ?? "";
+  const [a, b] = (text.match(/\d+/g) ?? []).map(Number);
+  return a * b;
+}
