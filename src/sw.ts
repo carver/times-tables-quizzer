@@ -9,6 +9,8 @@
 // than DOM - see its comment) since `self` here is a ServiceWorkerGlobalScope,
 // not a Window, and the two typings conflict if mixed in one program.
 import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
+import { registerRoute } from "workbox-routing";
+import { CacheFirst } from "workbox-strategies";
 import { getLastActivityDay, shouldRemind } from "./reminderStore";
 
 // Periodic Background Sync isn't in TypeScript's shipped DOM/WebWorker
@@ -28,6 +30,14 @@ declare const self: ServiceWorkerGlobalScope & {
 self.skipWaiting();
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
+
+// The cloudSync chunk (Firebase's SDK) is excluded from the precache
+// manifest above on purpose (vite.config.ts's globIgnores) - it's only
+// ever downloaded by a device that actually dynamically imports it
+// (main.ts, once sync is turned on). This route just means that once a
+// device has fetched it, it's cached like everything else for offline
+// reuse - never fetched eagerly by every installed device up front.
+registerRoute(({ url }) => /\/cloudSync-.*\.js$/.test(url.pathname), new CacheFirst({ cacheName: "cloud-sync-chunk" }));
 
 const REMINDER_TAG = "daily-reminder";
 const REMINDER_ICON = "icons/icon-any-192.png";

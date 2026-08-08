@@ -407,6 +407,127 @@ body {
   margin: 0;
 }
 
+/* Cross-device sync panel (docs/adr/0006) - a small bordered card rather
+   than a full takeover, since it's an occasional settings action, not
+   something that needs to interrupt practice the way a Celebration does. */
+.sync-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  width: min(85vw, 320px);
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, Canvas 92%, transparent);
+}
+
+.sync-action {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: none;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.sync-action:active {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+/* "Stop syncing" - a real, reversible action (re-pairing is one link
+   away), but still not something to visually compete with the actions
+   above it. */
+.sync-action--quiet {
+  border-color: color-mix(in srgb, CanvasText 30%, transparent);
+  color: CanvasText;
+  opacity: 0.7;
+  font-weight: 500;
+}
+
+.sync-input {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid color-mix(in srgb, CanvasText 30%, transparent);
+  border-radius: 8px;
+  background: Canvas;
+  color: CanvasText;
+  font-size: 0.85rem;
+}
+
+.sync-status {
+  font-size: 0.85rem;
+  margin: 0;
+  opacity: 0.8;
+}
+
+#profile-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+/* Confirmation for "Join existing" replacing this device's own history
+   (docs/adr/0006) - a small centered card over a dim backdrop, distinct
+   from the Celebration takeover (.takeover) so the two visually
+   different kinds of "the whole screen pauses for this" moment - one
+   joyful, one a genuine heads-up - never look alike. Two layers (the
+   fixed, dimmed .sync-confirm backdrop and the centered .sync-confirm-card
+   itself) rather than one, since a single element can't both cover the
+   full screen AND be a small centered card. */
+.sync-confirm {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: color-mix(in srgb, Canvas 70%, black 30%);
+  z-index: 10;
+}
+
+.sync-confirm[hidden] {
+  display: none;
+}
+
+.sync-confirm-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+  background: Canvas;
+  color: CanvasText;
+  padding: 1.25rem;
+  border-radius: 12px;
+  max-width: 320px;
+}
+
+.sync-confirm-card p {
+  margin: 0;
+  text-align: center;
+  font-size: 0.95rem;
+}
+
+.sync-confirm-card button {
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+#sync-confirm-yes {
+  border: none;
+  background: var(--accent);
+  color: white;
+}
+
+#sync-confirm-no {
+  border: 1px solid color-mix(in srgb, CanvasText 30%, transparent);
+  background: none;
+  color: CanvasText;
+}
+
 /* Statistics screen (ticket #12) - the pinned surface (--stats-surface,
    defined above) is what the ramp/amber steps were actually validated
    against, so it's set here rather than left to `color-scheme`'s

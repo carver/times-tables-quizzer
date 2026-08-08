@@ -147,3 +147,20 @@ export function loadState(): AppState | null {
     return null;
   }
 }
+
+// Validates/normalizes a raw Firestore Profile document (docs/adr/0006)
+// into an EngineState, reusing `migrate()` rather than a second parallel
+// validator - a synced Profile document is exactly the same shape a
+// localStorage save is, just without the three device-local fields
+// (`lastMapShownDay`, `muted`, `remindersEnabled` - see the ADR for why
+// those never sync). Those three still get *defaulted* by migrate() as
+// "missing, predates this field" - harmless, since only the EngineState
+// part is kept here.
+export function parseEngineState(data: Record<string, unknown>): EngineState | null {
+  const migrated = migrate(data);
+  if (migrated === null) return null;
+
+  const { version: _version, lastMapShownDay: _lastMapShownDay, muted: _muted, remindersEnabled: _remindersEnabled, ...engine } =
+    migrated;
+  return engine;
+}

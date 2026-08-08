@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dayKey } from "./engine/engine";
-import { decideLanding, hashForRoute, routeFromHash } from "./route";
+import { decideLanding, hashForRoute, joinProfileIdFromHash, routeFromHash } from "./route";
 
 const DAY_MS = 86_400_000;
 const DAY0 = new Date(2026, 0, 1).getTime();
@@ -27,6 +27,26 @@ describe("hashForRoute", () => {
     for (const route of ["map", "quiz", "stats"] as const) {
       expect(routeFromHash(hashForRoute(route))).toBe(route);
     }
+  });
+});
+
+describe("joinProfileIdFromHash", () => {
+  it("extracts the Profile ID from a pairing link", () => {
+    expect(joinProfileIdFromHash("#/join/abc123")).toBe("abc123");
+  });
+
+  it("decodes a URL-encoded Profile ID", () => {
+    expect(joinProfileIdFromHash("#/join/abc%20123")).toBe("abc 123");
+  });
+
+  it("is null for every ordinary route hash", () => {
+    expect(joinProfileIdFromHash("#/map")).toBeNull();
+    expect(joinProfileIdFromHash("#/quiz")).toBeNull();
+    expect(joinProfileIdFromHash("")).toBeNull();
+  });
+
+  it("routeFromHash still falls back to map for a join hash it doesn't recognize as its own", () => {
+    expect(routeFromHash("#/join/abc123")).toBe("map");
   });
 });
 

@@ -21,10 +21,27 @@ export default defineConfig({
   // Tests run against the production build, not the dev server: it's the
   // artifact that actually gets deployed, and `base: "./"` in
   // vite.config.ts means this is byte-for-byte what Pages serves.
-  webServer: {
-    command: `npm run build && npm run preview -- --port ${PORT} --strictPort`,
-    url: `http://localhost:${PORT}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: `npm run build && npm run preview -- --port ${PORT} --strictPort`,
+      url: `http://localhost:${PORT}`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    // The Firebase emulator (docs/adr/0006): cloudSync.ts's default
+    // "demo-times-tables-quizzer" project ID only ever talks to this -
+    // never a real cloud project - so the sync/pairing specs below get a
+    // genuine Firestore+Auth backend without needing any real account.
+    // Polls the Auth emulator specifically, not Firestore - Auth
+    // consistently finishes initializing noticeably later (~20s vs ~5s)
+    // despite starting second in its own startup log, so polling
+    // Firestore's port alone reports "ready" while Auth is still
+    // warming up and signInAnonymously calls would fail outright.
+    {
+      command: "firebase emulators:start --only firestore,auth --project demo-times-tables-quizzer",
+      url: "http://127.0.0.1:9200/",
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+  ],
 });

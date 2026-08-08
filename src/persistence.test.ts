@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { NEW_STREAK, type EngineState } from "./engine/engine";
-import { CURRENT_SAVE_VERSION, loadState, saveState, type AppState } from "./persistence";
+import { CURRENT_SAVE_VERSION, loadState, parseEngineState, saveState, type AppState } from "./persistence";
 
 const STORAGE_KEY = "times-tables-quizzer:state";
 
@@ -204,5 +204,31 @@ describe("migration", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify("just a string"));
 
     expect(loadState()).toBeNull();
+  });
+});
+
+describe("parseEngineState", () => {
+  it("extracts just the EngineState fields from a raw Firestore Profile document (docs/adr/0006)", () => {
+    // A real synced document (cloudSync.ts's writeProfile) - the whole
+    // EngineState plus the two fields every synced document carries that
+    // aren't part of EngineState at all: `version` and `updatedAt`
+    // (a Firestore server timestamp, not something migrate() reads).
+    const profileDocument = { ...fullEngineState, version: 1, updatedAt: "2026-08-08T00:00:00.000Z" };
+
+    expect(parseEngineState(profileDocument)).toEqual(fullEngineState);
+  });
+
+  it("returns null for a document missing the core EngineState shape", () => {
+    expect(parseEngineState({ version: 1, updatedAt: "now" })).toBeNull();
+  });
+
+  it("never carries lastMapShownDay/muted/remindersEnabled through, even if a stray document has them", () => {
+    const withDeviceFields = { ...fullEngineState, version: 1, lastMapShownDay: "2026-08-01", muted: true, remindersEnabled: true };
+
+    const result = parseEngineState(withDeviceFields);
+
+    expect(result).not.toHaveProperty("lastMapShownDay");
+    expect(result).not.toHaveProperty("muted");
+    expect(result).not.toHaveProperty("remindersEnabled");
   });
 });

@@ -5,8 +5,12 @@ A practice app that drills a single learner on multiplication facts, aiming to b
 ## Language
 
 **Learner**:
-The one person using the app — currently a specific 9-year-old practicing multiplication facts. A single fixed persona, not a multi-profile or account system.
+The one person using the app — currently a specific 9-year-old practicing multiplication facts. A single fixed persona: this app has one Learner per Profile, never several to switch between within one.
 _Avoid_: User, student, player
+
+**Profile**:
+The shareable, syncable unit of one Learner's progress (docs/adr/0006) — a device joins a Profile via a one-time pairing link rather than a recurring export/import, and any number of devices can share one. Deliberately not a "Household": bundling multiple Learners' progress into one shared document would let two Learners practicing on two different devices at once clobber each other's concurrent writes, so each Learner's progress is its own independent Profile instead. This app's own UI only ever creates/shows one Profile at a time — the data model supports more without a rework, but nothing here builds the UI to manage several.
+_Avoid_: Household, Account, User, Family
 
 **Fact**:
 A single multiplication combination (e.g., "7 × 8") — the atomic unit the Learner is quizzed on and progress is tracked against.

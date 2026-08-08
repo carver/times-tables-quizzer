@@ -8,14 +8,23 @@ import {
   inlineCelebrations,
   type TakeoverQueue,
 } from "./celebrationQueue";
-import { createInitialState, MAX_ACTIVE_RANGE_SIZE, type Celebration, type CelebrationKind, type Dependencies, type Fact } from "./engine/engine";
-import { clearState, loadState, saveState, type AppState } from "./persistence";
+import { createInitialState, MAX_ACTIVE_RANGE_SIZE, type Celebration, type CelebrationKind, type Dependencies, type EngineState, type Fact } from "./engine/engine";
+import { clearState, loadState, parseEngineState, saveState, type AppState } from "./persistence";
+import {
+  activeProfile,
+  addPairedProfile,
+  generateProfileId,
+  pairedProfiles,
+  removePairedProfile,
+  setActiveProfile,
+} from "./profilePairing";
 import { computeProgressMapStatus, type ProgressHighWaterMark, type ProgressReadout } from "./progressMap";
 import { disableDailyReminder, enableDailyReminder, isReminderSupported } from "./reminders";
 import { setLastActivityDay } from "./reminderStore";
-import { decideLanding, hashForRoute, routeFromHash, type Route } from "./route";
+import { decideLanding, hashForRoute, joinProfileIdFromHash, routeFromHash, type Route } from "./route";
 import { createInitialScreen, pressBackspace, pressDigit, pressEnter, restartFactTimer, type ScreenState } from "./screen";
 import { classifyAccuracyCell, classifyFluencyCell, factTooltipText, type CellState } from "./stats";
+import { isRemoteUpdate, shouldApplyRemoteUpdate } from "./syncDecisions";
 
 const INITIAL_ACTIVE_RANGE = { size: 5 };
 const deps: Dependencies = { random: Math.random, now: Date.now };
@@ -99,8 +108,44 @@ getEl<HTMLDivElement>("app").innerHTML = `
       <p class="settings-hint" id="ios-install-hint" hidden>
         On iPhone/iPad: tap Share, then "Add to Home Screen".
       </p>
+
+      <button type="button" class="settings-link" id="sync-button"></button>
+      <div class="sync-panel" id="sync-panel" hidden>
+        <div id="sync-unpaired-actions">
+          <button type="button" class="sync-action" id="start-sharing-button">Start sharing from this device</button>
+          <p class="settings-hint">or, if another device already started sharing:</p>
+          <input type="text" class="sync-input" id="join-code-input" placeholder="Paste the sync link here" />
+          <button type="button" class="sync-action" id="join-button">Join</button>
+        </div>
+        <div id="sync-paired-actions" hidden>
+          <p class="sync-status" id="sync-status"></p>
+          <button type="button" class="sync-action" id="copy-sync-link-button">Copy sync link to share</button>
+          <div id="profile-switcher-wrap" hidden>
+            <p class="settings-hint">Switch profile:</p>
+            <div id="profile-switcher"></div>
+          </div>
+          <button type="button" class="sync-action sync-action--quiet" id="stop-syncing-button">
+            Stop syncing on this device
+          </button>
+        </div>
+        <p class="settings-hint" id="sync-hint" hidden></p>
+      </div>
     </div>
   </section>
+
+  <!-- Shown only mid-"Join existing", and only when this device already
+       has its own non-trivial practice history - joining a Profile
+       replaces this device's history with the shared one (there is one
+       Learner, not two histories to merge - docs/adr/0006), so this is
+       the one irreversible-feeling moment in the whole sync feature that
+       gets an explicit confirmation rather than happening silently. -->
+  <div class="sync-confirm" id="sync-confirm" hidden role="dialog" aria-modal="true">
+    <div class="sync-confirm-card">
+      <p id="sync-confirm-body"></p>
+      <button type="button" id="sync-confirm-yes">Replace with shared history</button>
+      <button type="button" id="sync-confirm-no">Cancel</button>
+    </div>
+  </div>
 
   <main class="screen quiz" id="screen-quiz">
     <header class="quiz-header">
@@ -217,6 +262,23 @@ const installButtonEl = getEl<HTMLButtonElement>("install-button");
 const reminderToggleEl = getEl<HTMLButtonElement>("reminder-toggle");
 const reminderHintEl = getEl<HTMLParagraphElement>("reminder-hint");
 const iosInstallHintEl = getEl<HTMLParagraphElement>("ios-install-hint");
+const syncButtonEl = getEl<HTMLButtonElement>("sync-button");
+const syncPanelEl = getEl<HTMLDivElement>("sync-panel");
+const syncUnpairedActionsEl = getEl<HTMLDivElement>("sync-unpaired-actions");
+const syncPairedActionsEl = getEl<HTMLDivElement>("sync-paired-actions");
+const startSharingButtonEl = getEl<HTMLButtonElement>("start-sharing-button");
+const joinCodeInputEl = getEl<HTMLInputElement>("join-code-input");
+const joinButtonEl = getEl<HTMLButtonElement>("join-button");
+const syncStatusEl = getEl<HTMLParagraphElement>("sync-status");
+const copySyncLinkButtonEl = getEl<HTMLButtonElement>("copy-sync-link-button");
+const profileSwitcherWrapEl = getEl<HTMLDivElement>("profile-switcher-wrap");
+const profileSwitcherEl = getEl<HTMLDivElement>("profile-switcher");
+const stopSyncingButtonEl = getEl<HTMLButtonElement>("stop-syncing-button");
+const syncHintEl = getEl<HTMLParagraphElement>("sync-hint");
+const syncConfirmEl = getEl<HTMLDivElement>("sync-confirm");
+const syncConfirmBodyEl = getEl<HTMLParagraphElement>("sync-confirm-body");
+const syncConfirmYesEl = getEl<HTMLButtonElement>("sync-confirm-yes");
+const syncConfirmNoEl = getEl<HTMLButtonElement>("sync-confirm-no");
 
 const quizScreenEl = getEl<HTMLElement>("screen-quiz");
 const streakEl = getEl<HTMLParagraphElement>("streak");
@@ -276,6 +338,238 @@ function persist() {
   // on I/O completing.
   const { lastActivityDay } = quizState.engine.streak;
   if (lastActivityDay !== null) void setLastActivityDay(lastActivityDay);
+}
+
+// --- Cross-device sync (docs/adr/0006) ---
+//
+// Entirely additive on top of everything above: localStorage (persist(),
+// loadState() at boot) stays the always-present, synchronous, zero-
+// network local save exactly as it's always been - this section only
+// bolts a Firestore mirror of the `engine` field on top, active only
+// once this device has paired with a Profile (profilePairing.ts).
+// `lastMapShownDay`/`muted`/`remindersEnabled` never appear here; they
+// stay device-local (see the ADR for why).
+//
+// cloudSync.ts is loaded via a dynamic import - never a static one - so
+// Firebase's SDK is only ever downloaded by a device that actually turns
+// sync on (see the ADR's "new runtime dependency" section).
+let cloudSyncModule: typeof import("./cloudSync") | undefined;
+
+function loadCloudSync(): Promise<typeof import("./cloudSync")> {
+  return (cloudSyncModule ? Promise.resolve(cloudSyncModule) : import("./cloudSync")).then((mod) => (cloudSyncModule = mod));
+}
+
+// A remote engine state waiting to be reconciled in - set whenever a
+// genuine (non-echo) snapshot arrives, cleared once actually applied.
+let pendingRemoteEngineState: EngineState | undefined;
+
+// Swaps in a pending remote update if one exists and it's currently safe
+// to do so (syncDecisions.shouldApplyRemoteUpdate) - never while the
+// Learner is live on the quiz route. Returns whether it actually applied
+// anything, so callers know whether a re-render is warranted. Mirrors
+// the merged result back into localStorage (persist()) so this device's
+// own next boot already reflects it - never pushes back to the cloud,
+// since Firestore is already the source this data came from.
+function applyPendingRemoteUpdate(route: Route): boolean {
+  if (!pendingRemoteEngineState || !shouldApplyRemoteUpdate(route)) return false;
+
+  quizState = createInitialScreen(pendingRemoteEngineState, deps);
+  pendingRemoteEngineState = undefined;
+  persist();
+  return true;
+}
+
+// The live-subscription callback (cloudSync.subscribeToProfile). Runs
+// whenever this Profile's document changes, whether from this device's
+// own write settling or a genuinely different one from elsewhere.
+function handleRemoteSnapshot(data: Record<string, unknown> | undefined, meta: { hasPendingWrites: boolean }) {
+  if (!data || !isRemoteUpdate(meta)) return;
+
+  const engine = parseEngineState(data);
+  if (!engine) return; // a malformed/partial document - nothing safe to reconcile against
+
+  pendingRemoteEngineState = engine;
+  const route = routeFromHash(window.location.hash);
+  // Applied outside the normal applyRoute flow (nothing navigated us
+  // here), so re-render explicitly - applyRoute's own leading check
+  // will find pendingRemoteEngineState already cleared and just render.
+  if (applyPendingRemoteUpdate(route)) applyRoute(route);
+}
+
+// Pushes this device's current engine state to the cloud - called after
+// every genuine local Attempt (handleEnter), never after a device-local
+// settings change (mute/reminders). Silently a no-op on a device that
+// hasn't paired with a Profile - the overwhelming majority of installs.
+function pushEngineStateToCloud() {
+  const profile = activeProfile();
+  if (!profile) return;
+  void loadCloudSync().then((mod) => mod.writeProfile(profile.profileId, quizState.engine));
+}
+
+// Starts (or restarts, if switching Profiles) the live subscription for
+// `profileId`. Exported for the pairing UI (task 4) to call right after
+// "Start sharing"/"Join existing" completes, in addition to running here
+// at boot for a device that's already paired from a previous session.
+let unsubscribeFromProfile: (() => void) | undefined;
+
+function startSyncing(profileId: string) {
+  unsubscribeFromProfile?.();
+  void loadCloudSync().then((mod) => {
+    unsubscribeFromProfile = mod.subscribeToProfile(profileId, handleRemoteSnapshot);
+  });
+}
+
+// A shareable link rather than a bare Profile ID, so pairing is "paste
+// what your other phone sent you" - route.ts's joinProfileIdFromHash
+// (and this function's own input-parsing counterpart below) is the only
+// place that knows this shape.
+function pairingLinkForProfile(profileId: string): string {
+  const url = new URL(window.location.href);
+  url.hash = `#/join/${encodeURIComponent(profileId)}`;
+  return url.toString();
+}
+
+// Accepts either a full pasted link or a bare Profile ID typed/pasted on
+// its own, so "Join" isn't picky about exactly what got copied.
+function profileIdFromPastedText(raw: string): string | null {
+  const trimmed = raw.trim();
+  const hashIndex = trimmed.indexOf("#/join/");
+  if (hashIndex !== -1) return joinProfileIdFromHash(trimmed.slice(hashIndex));
+  return /^[0-9a-f-]{10,}$/i.test(trimmed) ? trimmed : null;
+}
+
+// "Non-trivial" mirrors docs/adr/0006's replace-not-merge rule: a device
+// that has never actually been practiced on (a brand-new install, or one
+// that's only ever sat on the map screen) has nothing worth confirming
+// before replacing - the confirmation exists to protect real history,
+// not to add a click to every join.
+function hasNonTrivialLocalProgress(engine: EngineState): boolean {
+  return Object.keys(engine.fluency).length > 0 || engine.streak.count > 0;
+}
+
+function showSyncHint(text: string) {
+  syncHintEl.textContent = text;
+  syncHintEl.hidden = false;
+}
+
+// Reflects the current pairing state into the sync panel - called
+// whenever it changes (start sharing, join, switch, stop) and whenever
+// the panel is opened, the same "render wherever the state can change"
+// pattern renderMuteToggle/renderReminderToggle already use.
+function renderSyncPanel() {
+  const profile = activeProfile();
+
+  if (profile) {
+    syncButtonEl.textContent = `🔗 Synced: ${profile.label}`;
+    syncUnpairedActionsEl.hidden = true;
+    syncPairedActionsEl.hidden = false;
+    syncStatusEl.textContent = `This device is synced to "${profile.label}".`;
+  } else {
+    syncButtonEl.textContent = "🔗 Sync across devices";
+    syncUnpairedActionsEl.hidden = false;
+    syncPairedActionsEl.hidden = true;
+  }
+
+  renderProfileSwitcher();
+}
+
+// Only ever shows anything once a device has paired with a *second*
+// Profile (not part of this pass's scope to build creating one, but the
+// data model - profilePairing.ts's array - already supports it without
+// a rework, and a device could still end up with two via two separate
+// "Join" actions) - see docs/adr/0006's "Profile, not Household" section
+// for why. A device with zero or one paired Profile sees no switcher at
+// all, matching "don't make me re-pair every time we switch" without
+// cluttering the common case with UI for a case that isn't happening.
+function renderProfileSwitcher() {
+  const profiles = pairedProfiles();
+  if (profiles.length <= 1) {
+    profileSwitcherWrapEl.hidden = true;
+    return;
+  }
+
+  profileSwitcherWrapEl.hidden = false;
+  profileSwitcherEl.innerHTML = "";
+  const active = activeProfile();
+  for (const profile of profiles) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "settings-link";
+    const isActive = profile.profileId === active?.profileId;
+    button.textContent = isActive ? `${profile.label} ✓` : profile.label;
+    button.disabled = isActive;
+    button.addEventListener("click", () => void switchToProfile(profile.profileId));
+    profileSwitcherEl.appendChild(button);
+  }
+}
+
+// Switching, unlike joining, never needs the replace-confirmation - a
+// device already paired with both Profiles has already agreed (at join
+// time) to let sync own its state, so there's no "first time" local
+// history at risk of a surprise replace.
+async function switchToProfile(profileId: string): Promise<void> {
+  setActiveProfile(profileId);
+  const mod = await loadCloudSync();
+  const data = await mod.fetchProfile(profileId);
+  const engine = data ? parseEngineState(data) : null;
+  quizState = createInitialScreen(engine ?? createInitialState(INITIAL_ACTIVE_RANGE, deps), deps);
+  persist();
+  startSyncing(profileId);
+  renderSyncPanel();
+  applyRoute(routeFromHash(window.location.hash));
+}
+
+function completeJoin(profileId: string, remoteEngine: EngineState) {
+  addPairedProfile({ profileId, label: "Shared progress" });
+  quizState = createInitialScreen(remoteEngine, deps);
+  persist();
+  startSyncing(profileId);
+  joinCodeInputEl.value = "";
+  renderSyncPanel();
+  applyRoute(routeFromHash(window.location.hash));
+}
+
+// Set only while docs/adr/0006's replace-confirmation is up, so the
+// Confirm button has something to act on and Cancel has nothing to
+// clean up beyond hiding the dialog.
+let pendingJoinProfileId: string | null = null;
+let pendingJoinRemoteEngine: EngineState | undefined;
+
+function showJoinConfirm(local: EngineState, remote: EngineState) {
+  syncConfirmBodyEl.textContent =
+    `This phone already has its own practice history (Streak: ${dayCount(local.streak.count)}, ` +
+    `${local.activeRange.size}×${local.activeRange.size} range). Joining will replace it with the shared history ` +
+    `(Streak: ${dayCount(remote.streak.count)}, ${remote.activeRange.size}×${remote.activeRange.size} range). Continue?`;
+  syncConfirmEl.hidden = false;
+}
+
+// The one shared entry point for both "Start sharing" (an ID nothing
+// yet exists for) and "Join existing" (an ID another device already
+// wrote to) - fetches whatever's actually there first rather than
+// assuming, since a mistyped/stale link should fail honestly rather than
+// silently pairing to nothing.
+async function beginJoin(profileId: string): Promise<void> {
+  const mod = await loadCloudSync();
+  const data = await mod.fetchProfile(profileId);
+  if (!data) {
+    showSyncHint("Couldn't find that sync link's shared progress - double check it was pasted in full.");
+    return;
+  }
+
+  const remoteEngine = parseEngineState(data);
+  if (!remoteEngine) {
+    showSyncHint("That shared progress looks corrupted - try copying the sync link again from the other device.");
+    return;
+  }
+
+  if (hasNonTrivialLocalProgress(quizState.engine)) {
+    pendingJoinProfileId = profileId;
+    pendingJoinRemoteEngine = remoteEngine;
+    showJoinConfirm(quizState.engine, remoteEngine);
+    return;
+  }
+
+  completeJoin(profileId, remoteEngine);
 }
 
 // Builds one 12x12 grid of cells - shared by the Progress map's own grid
@@ -348,6 +642,7 @@ function renderMap() {
   mapStreakEl.textContent = `Streak: ${dayCount(count)}`;
   renderMuteToggle();
   renderReminderToggle();
+  renderSyncPanel();
 
   renderProgressGrid(engine.activeRange.size);
 
@@ -632,12 +927,14 @@ function handleEnter() {
       return;
     case "correct":
       persist();
+      pushEngineStateToCloud();
       playInlineCelebrations(inlineCelebrations(outcome.celebrations), quizState.engine.streak.count);
       takeoverQueue = enqueueTakeovers(takeoverQueue, outcome.celebrations);
       syncTakeoverDisplay();
       break;
     case "incorrect":
       persist();
+      pushEngineStateToCloud();
       // The wrong-answer sound: a soft low tone, never a buzzer (the
       // issue's central commitment - the Learner is nine). Plays every
       // time, independent of whether this Attempt also carries a
@@ -721,6 +1018,13 @@ document.addEventListener("keydown", (keyEvent) => {
 // state being written straight back out by the next persist().
 resetConfirmEl.addEventListener("click", () => {
   clearState();
+  // A device left paired to a Profile (docs/adr/0006) would otherwise
+  // have this reset immediately undone: the live subscription (started
+  // again on the very next boot, unconditionally, for any paired device)
+  // would redeliver the old shared progress moments after reload. "Erase
+  // everything" has to mean it, so this device is detached first.
+  const profile = activeProfile();
+  if (profile) removePairedProfile(profile.profileId);
   window.location.hash = hashForRoute("map");
   window.location.reload();
 });
@@ -769,6 +1073,84 @@ reminderToggleEl.addEventListener("click", () => {
       showReminderHint("Reminders need notification permission - check your browser/site settings and try again.");
     }
   })();
+});
+
+syncButtonEl.addEventListener("click", () => {
+  syncPanelEl.hidden = !syncPanelEl.hidden;
+  if (!syncPanelEl.hidden) renderSyncPanel();
+});
+
+startSharingButtonEl.addEventListener("click", () => {
+  void (async () => {
+    const profileId = generateProfileId();
+    const mod = await loadCloudSync();
+    // Awaited deliberately, unlike pushEngineStateToCloud's ongoing
+    // fire-and-forget pushes: the whole point of this one-time upload is
+    // that the link is immediately shareable, so this waits for the
+    // backend to actually confirm it rather than assuming success.
+    const success = await mod.writeProfile(profileId, quizState.engine);
+    if (!success) {
+      showSyncHint("Couldn't reach the sync service - check your connection and try again.");
+      return;
+    }
+    addPairedProfile({ profileId, label: "Shared progress" });
+    startSyncing(profileId);
+    renderSyncPanel();
+    showSyncHint('Ready — tap "Copy sync link to share" and send it to the other phone.');
+  })();
+});
+
+joinButtonEl.addEventListener("click", () => {
+  const profileId = profileIdFromPastedText(joinCodeInputEl.value);
+  if (!profileId) {
+    showSyncHint("That doesn't look like a valid sync link - paste the whole thing.");
+    return;
+  }
+  syncHintEl.hidden = true;
+  void beginJoin(profileId);
+});
+
+copySyncLinkButtonEl.addEventListener("click", () => {
+  const profile = activeProfile();
+  if (!profile) return;
+  const link = pairingLinkForProfile(profile.profileId);
+
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(link).then(
+      () => showSyncHint("Sync link copied — paste it on the other phone (e.g. in a text message)."),
+      () => showSyncHint(`Copy this link and send it to the other phone: ${link}`),
+    );
+  } else {
+    showSyncHint(`Copy this link and send it to the other phone: ${link}`);
+  }
+});
+
+// Detaches this device from its Profile - the Profile itself, and any
+// other device synced to it, are untouched. This device's own local
+// progress is left exactly as it currently stands (not erased), just no
+// longer pushed to or pulled from the cloud.
+stopSyncingButtonEl.addEventListener("click", () => {
+  const profile = activeProfile();
+  if (!profile) return;
+  unsubscribeFromProfile?.();
+  unsubscribeFromProfile = undefined;
+  removePairedProfile(profile.profileId);
+  renderSyncPanel();
+});
+
+syncConfirmYesEl.addEventListener("click", () => {
+  if (pendingJoinProfileId && pendingJoinRemoteEngine) {
+    completeJoin(pendingJoinProfileId, pendingJoinRemoteEngine);
+  }
+  syncConfirmEl.hidden = true;
+  pendingJoinProfileId = null;
+  pendingJoinRemoteEngine = undefined;
+});
+
+syncConfirmNoEl.addEventListener("click", () => {
+  syncConfirmEl.hidden = true;
+  pendingJoinProfileId = null;
+  pendingJoinRemoteEngine = undefined;
 });
 
 // Chrome/Android fires this instead of showing its own install banner
@@ -851,6 +1233,12 @@ document.addEventListener("keydown", () => initAudio(), { once: true });
 // deliberately just toggling which <section> is visible off of
 // `location.hash`, so the browser/Android back button works for free.
 function applyRoute(route: Route) {
+  // Reconcile any remote update that arrived while it wasn't safe to
+  // apply (the Learner was mid-question on the quiz route) - every route
+  // change is a natural point to catch up, including the very first one
+  // at boot.
+  applyPendingRemoteUpdate(route);
+
   mapScreenEl.dataset.active = String(route === "map");
   quizScreenEl.dataset.active = String(route === "quiz");
   statsScreenEl.dataset.active = String(route === "stats");
@@ -865,6 +1253,13 @@ function applyRoute(route: Route) {
 }
 
 window.addEventListener("hashchange", () => applyRoute(routeFromHash(window.location.hash)));
+
+// Captured before anything below has a chance to overwrite
+// window.location.hash (decideLanding's own landing-hash normalization
+// does exactly that when the requested hash isn't one of its three
+// routes, which "#/join/<id>" never is) - reading this hash again later
+// would silently see "#/map" instead and never notice the join at all.
+const joinProfileId = joinProfileIdFromHash(window.location.hash);
 
 // CONTEXT.md's Progress map landing rule: shown on the first open of
 // each calendar day, straight to the quiz on later opens the same day.
@@ -883,3 +1278,24 @@ if (window.location.hash !== landingHash) {
   window.location.hash = landingHash;
 }
 applyRoute(landing.route);
+
+// A device that paired with a Profile in an earlier session resumes
+// syncing immediately, with no re-pairing - the whole reason
+// profilePairing.ts remembers it locally. The overwhelming majority of
+// installs have never paired with anything, so this is a no-op for them
+// (and Firebase's SDK never even downloads - see loadCloudSync above).
+const pairedProfile = activeProfile();
+if (pairedProfile) {
+  startSyncing(pairedProfile.profileId);
+}
+
+// A pairing link (route.ts's joinProfileIdFromHash - "#/join/<id>", from
+// "Copy sync link to share") is a one-time action, not a screen with its
+// own back-button-navigable state - consumed here once (the hash was
+// already normalized to the map above, as part of the landing decision).
+if (joinProfileId) {
+  syncPanelEl.hidden = false;
+  renderSyncPanel();
+  showSyncHint("Looking for the shared progress from that link…");
+  void beginJoin(joinProfileId);
+}

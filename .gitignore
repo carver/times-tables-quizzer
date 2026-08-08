@@ -28,3 +28,15 @@ dist-ssr
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Firebase - real project credentials/local emulator state, never the
+# committed demo/emulator config (firebase.json, .firebaserc, firestore.rules
+# stay tracked - see docs/adr/0006)
+.env
+.env.*
+!.env.example
+.firebase/
+firestore-debug.log
+firebase-debug.log
+ui-debug.log
+/firestore-tests/emulator-data/

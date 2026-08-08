@@ -33,6 +33,18 @@ export function hashForRoute(route: Route): string {
   return HASHES[route];
 }
 
+// A pairing link (docs/adr/0006, e.g. "#/join/<profileId>") is
+// deliberately NOT a Route/HASHES entry - it's a one-time action the
+// join flow consumes and clears, not a screen with its own persistent
+// state, so it doesn't belong in routeFromHash's fixed four. An
+// unrecognized "#/join/..." hash still falls back to "map" via
+// routeFromHash exactly like any other stray hash - this is the only
+// place that treats it specially.
+export function joinProfileIdFromHash(hash: string): string | null {
+  const match = /^#\/join\/([^/]+)$/.exec(hash);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 export type LandingDecision = {
   route: Route;
   // Set only when this decision lands on the map for a calendar day it
