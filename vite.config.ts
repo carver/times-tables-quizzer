@@ -1,4 +1,8 @@
 import { defineConfig } from "vite";
+import { VitePWA } from "vite-plugin-pwa";
+
+const ACCENT = "#2563eb"; // matches --accent in style.css
+const CREAM = "#fcfcfb"; // matches --stats-surface (light) in style.css
 
 export default defineConfig({
   // Relative asset paths, so one build works both at the root (local
@@ -13,4 +17,47 @@ export default defineConfig({
     // outright under Vitest - they need a browser and a served app.
     include: ["src/**/*.test.ts"],
   },
+  plugins: [
+    VitePWA({
+      // Custom service worker (src/sw.ts) rather than the plugin's fully
+      // generated one - the daily-reminder Periodic Background Sync
+      // handler needs code of its own alongside Workbox's precaching.
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
+      injectManifest: {
+        // This app is a handful of small hashed bundles, not worth
+        // Workbox's default size ceiling warning.
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+      },
+      // main.ts registers the service worker itself (see the
+      // navigator.serviceWorker.register call) so it can be sequenced
+      // with the rest of startup rather than an auto-injected script.
+      injectRegister: false,
+      // Never run the SW under `vite dev` - the dev server's own
+      // module graph already reloads instantly, and a stale precache
+      // fighting Vite's dev server during iteration isn't worth it.
+      devOptions: { enabled: false },
+      manifest: {
+        name: "Times Tables Quizzer",
+        short_name: "Times Tables",
+        description: "Practice multiplication facts and build real fluency.",
+        start_url: "./",
+        scope: "./",
+        display: "standalone",
+        background_color: CREAM,
+        theme_color: ACCENT,
+        icons: [
+          { src: "icons/icon-any-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "icons/icon-any-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "icons/icon-maskable-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
+          { src: "icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          // Android 13+'s themed-icon layer (the "grayscale option"):
+          // alpha-only glyph, recolored by the OS to match the wallpaper.
+          { src: "icons/icon-monochrome-192.png", sizes: "192x192", type: "image/png", purpose: "monochrome" },
+          { src: "icons/icon-monochrome-512.png", sizes: "512x512", type: "image/png", purpose: "monochrome" },
+        ],
+      },
+    }),
+  ],
 });

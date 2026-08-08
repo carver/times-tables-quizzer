@@ -2,27 +2,19 @@
   "compilerOptions": {
     "target": "es2023",
     "module": "esnext",
-    "lib": ["ES2023", "DOM"],
-    "types": ["vite/client"],
-    "allowArbitraryExtensions": true,
+    "lib": ["ES2023", "WebWorker"],
     "skipLibCheck": true,
 
-    /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
 
-    /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
-  // sw.ts runs in a ServiceWorkerGlobalScope, not a Window - it has its
-  // own tsconfig (tsconfig.sw.json, WebWorker lib instead of DOM) so the
-  // two `self` typings never collide in one program.
-  "exclude": ["src/sw.ts"]
+  "include": ["src/sw.ts"]
 }

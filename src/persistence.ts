@@ -20,19 +20,28 @@ const STORAGE_KEY = "times-tables-quizzer:state";
 // save file"). A save from before this version has never had the toggle
 // touched, so it defaults to false (unmuted) - the same default a
 // brand-new save gets.
-export const CURRENT_SAVE_VERSION = 4;
+// Version 5 adds `remindersEnabled` - whether the Learner opted into the
+// daily-reminder notification. Defaults to false (opt-in, never sprung on
+// an existing save) same as a brand-new save.
+export const CURRENT_SAVE_VERSION = 5;
 
 // What the rest of the app actually works with: the engine's state plus
-// the two pieces of app-level (not engine-domain) state that ride the
-// same save file - the Progress map landing rule's day marker (ticket
-// #11) and the audio mute toggle (ticket #13).
+// the pieces of app-level (not engine-domain) state that ride the same
+// save file - the Progress map landing rule's day marker (ticket #11),
+// the audio mute toggle (ticket #13), and the daily-reminder opt-in.
 export type AppState = {
   engine: EngineState;
   lastMapShownDay: DayKey | null;
   muted: boolean;
+  remindersEnabled: boolean;
 };
 
-type PersistedState = EngineState & { lastMapShownDay: DayKey | null; muted: boolean; version: number };
+type PersistedState = EngineState & {
+  lastMapShownDay: DayKey | null;
+  muted: boolean;
+  remindersEnabled: boolean;
+  version: number;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -91,6 +100,10 @@ function migrate(value: Record<string, unknown>): PersistedState | null {
     // or a corrupted flag, and both should fall back to unmuted rather
     // than the fail-silent-and-confusing alternative.
     muted: typeof value.muted === "boolean" ? value.muted : false,
+    // Opt-in only - absent/malformed means either a pre-reminder save or a
+    // corrupted flag, and both should fall back to "not asking for
+    // notifications" rather than silently turning them on.
+    remindersEnabled: typeof value.remindersEnabled === "boolean" ? value.remindersEnabled : false,
     version: CURRENT_SAVE_VERSION,
   };
 }
@@ -100,6 +113,7 @@ export function saveState(state: AppState): void {
     ...state.engine,
     lastMapShownDay: state.lastMapShownDay,
     muted: state.muted,
+    remindersEnabled: state.remindersEnabled,
     version: CURRENT_SAVE_VERSION,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
@@ -127,8 +141,8 @@ export function loadState(): AppState | null {
 
     // `version` only exists to drive migrate() above - EngineState itself
     // carries no version field, so it's stripped back off here.
-    const { version: _version, lastMapShownDay, muted, ...engine } = migrated;
-    return { engine, lastMapShownDay, muted };
+    const { version: _version, lastMapShownDay, muted, remindersEnabled, ...engine } = migrated;
+    return { engine, lastMapShownDay, muted, remindersEnabled };
   } catch {
     return null;
   }

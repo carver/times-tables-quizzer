@@ -381,3 +381,72 @@ test.describe("the inline Celebration overlay", () => {
     await expect(page.locator("#prompt")).toContainText("?");
   });
 });
+
+test.describe("home-screen install", () => {
+  test("links a valid manifest with a full icon set, and registers the service worker", async ({ page }) => {
+    const errors = trackPageErrors(page);
+    await page.goto("/");
+
+    const manifestHref = await page.locator('link[rel="manifest"]').getAttribute("href");
+    expect(manifestHref).toBeTruthy();
+
+    const manifestUrl = new URL(manifestHref!, page.url()).toString();
+    const manifestResponse = await page.request.get(manifestUrl);
+    expect(manifestResponse.ok()).toBe(true);
+    const manifest = await manifestResponse.json();
+
+    expect(manifest.display).toBe("standalone");
+    expect(manifest.icons.map((icon: { purpose?: string }) => icon.purpose)).toEqual(
+      expect.arrayContaining(["any", "maskable", "monochrome"]),
+    );
+
+    // Every icon the manifest points at must actually be servable, not
+    // just present in the JSON - a typo'd path here would otherwise only
+    // surface as a launcher silently falling back to a generic icon.
+    for (const icon of manifest.icons as Array<{ src: string }>) {
+      const iconUrl = new URL(icon.src, manifestUrl).toString();
+      const response = await page.request.get(iconUrl);
+      expect(response.ok(), `${icon.src} should be servable`).toBe(true);
+    }
+
+    await expect
+      .poll(() => page.evaluate(() => navigator.serviceWorker.getRegistrations().then((r) => r.length)))
+      .toBeGreaterThan(0);
+
+    expect(errors).toEqual([]);
+  });
+
+  test("iOS shows a manual install hint instead of a button, since Safari has no install prompt API", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)" });
+    const page = await context.newPage();
+    await page.goto("/");
+
+    await expect(page.locator("#ios-install-hint")).toBeVisible();
+    await expect(page.locator("#install-button")).toBeHidden();
+
+    await context.close();
+  });
+
+  test("the daily-reminder toggle starts off, and never claims success it can't back up", async ({ page }) => {
+    await page.goto("/");
+
+    const toggle = page.locator("#reminder-toggle");
+    await expect(toggle).toHaveText(/Daily reminder: Off/);
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+    await toggle.click();
+
+    // Headless CI has neither a granted notification permission nor the
+    // real-world "site engagement" Chrome requires before it will
+    // register a periodic sync, so this can't assert it turns on -
+    // only that it never shows "On" without the hint explaining why not,
+    // the one failure mode that would mislead a parent into thinking
+    // reminders are live when they aren't.
+    const isOn = (await toggle.getAttribute("aria-pressed")) === "true";
+    if (!isOn) {
+      await expect(page.locator("#reminder-hint")).toBeVisible();
+    }
+  });
+});

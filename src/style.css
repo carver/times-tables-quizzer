@@ -377,6 +377,36 @@ body {
   color: CanvasText;
 }
 
+/* Install/reminder controls: same quiet weight as .stats-link - utility
+   settings, not competing with Practice for attention. */
+.map-settings {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.settings-link {
+  border: none;
+  background: none;
+  font-size: 0.85rem;
+  opacity: 0.6;
+  color: CanvasText;
+  padding: 0.2rem 0.4rem;
+}
+
+.settings-link:active {
+  opacity: 0.9;
+}
+
+.settings-hint {
+  font-size: 0.75rem;
+  opacity: 0.55;
+  max-width: 260px;
+  margin: 0;
+}
+
 /* Statistics screen (ticket #12) - the pinned surface (--stats-surface,
    defined above) is what the ramp/amber steps were actually validated
    against, so it's set here rather than left to `color-scheme`'s

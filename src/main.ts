@@ -11,6 +11,8 @@ import {
 import { createInitialState, MAX_ACTIVE_RANGE_SIZE, type Celebration, type CelebrationKind, type Dependencies, type Fact } from "./engine/engine";
 import { clearState, loadState, saveState, type AppState } from "./persistence";
 import { computeProgressMapStatus, type ProgressHighWaterMark, type ProgressReadout } from "./progressMap";
+import { disableDailyReminder, enableDailyReminder, isReminderSupported } from "./reminders";
+import { setLastActivityDay } from "./reminderStore";
 import { decideLanding, hashForRoute, routeFromHash, type Route } from "./route";
 import { createInitialScreen, pressBackspace, pressDigit, pressEnter, restartFactTimer, type ScreenState } from "./screen";
 import { classifyAccuracyCell, classifyFluencyCell, factTooltipText, type CellState } from "./stats";
@@ -89,6 +91,15 @@ getEl<HTMLDivElement>("app").innerHTML = `
 
     <a class="practice-button" id="practice-link" href="#/quiz">Practice</a>
     <a class="stats-link" id="stats-link" href="#/stats">Stats</a>
+
+    <div class="map-settings">
+      <button type="button" class="settings-link" id="install-button" hidden>📲 Add to Home Screen</button>
+      <button type="button" class="settings-link" id="reminder-toggle" aria-pressed="false"></button>
+      <p class="settings-hint" id="reminder-hint" hidden></p>
+      <p class="settings-hint" id="ios-install-hint" hidden>
+        On iPhone/iPad: tap Share, then "Add to Home Screen".
+      </p>
+    </div>
   </section>
 
   <main class="screen quiz" id="screen-quiz">
@@ -202,6 +213,10 @@ const progressGridEl = getEl<HTMLDivElement>("progress-grid");
 const progressReadoutEl = getEl<HTMLParagraphElement>("progress-readout");
 const muteToggleEl = getEl<HTMLButtonElement>("mute-toggle");
 const practiceLinkEl = getEl<HTMLAnchorElement>("practice-link");
+const installButtonEl = getEl<HTMLButtonElement>("install-button");
+const reminderToggleEl = getEl<HTMLButtonElement>("reminder-toggle");
+const reminderHintEl = getEl<HTMLParagraphElement>("reminder-hint");
+const iosInstallHintEl = getEl<HTMLParagraphElement>("ios-install-hint");
 
 const quizScreenEl = getEl<HTMLElement>("screen-quiz");
 const streakEl = getEl<HTMLParagraphElement>("streak");
@@ -223,10 +238,16 @@ const accuracyGridEl = getEl<HTMLDivElement>("accuracy-grid");
 const fluencyGridEl = getEl<HTMLDivElement>("fluency-grid");
 const statsTooltipEl = getEl<HTMLDivElement>("stats-tooltip");
 
-const loaded: AppState = loadState() ?? { engine: createInitialState(INITIAL_ACTIVE_RANGE, deps), lastMapShownDay: null, muted: false };
+const loaded: AppState = loadState() ?? {
+  engine: createInitialState(INITIAL_ACTIVE_RANGE, deps),
+  lastMapShownDay: null,
+  muted: false,
+  remindersEnabled: false,
+};
 let quizState: ScreenState = createInitialScreen(loaded.engine, deps);
 let lastMapShownDay = loaded.lastMapShownDay;
 let muted = loaded.muted;
+let remindersEnabled = loaded.remindersEnabled;
 setMuted(muted);
 let overlayTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -246,7 +267,15 @@ let displayedTakeover: Celebration | undefined;
 let progressHighWaterMark: ProgressHighWaterMark | null = null;
 
 function persist() {
-  saveState({ engine: quizState.engine, lastMapShownDay, muted });
+  saveState({ engine: quizState.engine, lastMapShownDay, muted, remindersEnabled });
+
+  // Mirrors just this one DayKey into IndexedDB (reminderStore.ts) so the
+  // service worker's periodicsync handler can tell whether today's
+  // practice has already happened without an open page to ask -
+  // fire-and-forget, same as the rest of persistence here never blocking
+  // on I/O completing.
+  const { lastActivityDay } = quizState.engine.streak;
+  if (lastActivityDay !== null) void setLastActivityDay(lastActivityDay);
 }
 
 // Builds one 12x12 grid of cells - shared by the Progress map's own grid
@@ -305,11 +334,20 @@ function renderMuteToggle() {
   muteToggleEl.setAttribute("aria-pressed", String(muted));
 }
 
+// Mirrors renderMuteToggle's pattern - rendered wherever remindersEnabled
+// can change (the initial map render and right after the toggle's own
+// click).
+function renderReminderToggle() {
+  reminderToggleEl.textContent = remindersEnabled ? "🔔 Daily reminder: On" : "🔕 Daily reminder: Off";
+  reminderToggleEl.setAttribute("aria-pressed", String(remindersEnabled));
+}
+
 function renderMap() {
   const { engine } = quizState;
   const { count } = engine.streak;
   mapStreakEl.textContent = `Streak: ${dayCount(count)}`;
   renderMuteToggle();
+  renderReminderToggle();
 
   renderProgressGrid(engine.activeRange.size);
 
@@ -693,6 +731,93 @@ muteToggleEl.addEventListener("click", () => {
   renderMuteToggle();
   persist();
 });
+
+function showReminderHint(text: string) {
+  reminderHintEl.textContent = text;
+  reminderHintEl.hidden = false;
+}
+
+// Turning the reminder off never fails (there's nothing to be denied),
+// but turning it on can fail several ways - permission refused, the
+// browser lacking Periodic Background Sync entirely, or Chrome's own
+// site-engagement heuristic rejecting the registration - and in every
+// failing case this leaves remindersEnabled false and says why, rather
+// than showing "On" for a reminder that will never actually fire.
+reminderToggleEl.addEventListener("click", () => {
+  void (async () => {
+    if (remindersEnabled) {
+      await disableDailyReminder();
+      remindersEnabled = false;
+      renderReminderToggle();
+      persist();
+      return;
+    }
+
+    if (!isReminderSupported()) {
+      showReminderHint(
+        "Daily reminders aren't supported in this browser. On Android, install this app to the home screen with Chrome first.",
+      );
+      return;
+    }
+
+    reminderHintEl.hidden = true;
+    const enabled = await enableDailyReminder();
+    remindersEnabled = enabled;
+    renderReminderToggle();
+    persist();
+    if (!enabled) {
+      showReminderHint("Reminders need notification permission - check your browser/site settings and try again.");
+    }
+  })();
+});
+
+// Chrome/Android fires this instead of showing its own install banner
+// when the page calls preventDefault() on it, handing control of exactly
+// when/how to prompt to the app - stashed here and used by the install
+// button's click handler below. Safari has no such event at all (see the
+// iOS hint instead).
+let deferredInstallPrompt: Event | null = null;
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  installButtonEl.hidden = false;
+});
+
+installButtonEl.addEventListener("click", () => {
+  const promptEvent = deferredInstallPrompt as (Event & { prompt: () => Promise<void> }) | null;
+  if (!promptEvent) return;
+  installButtonEl.hidden = true;
+  deferredInstallPrompt = null;
+  void promptEvent.prompt();
+});
+
+// Fires once the Learner actually installs (via the button above, or
+// Chrome's own menu) - the deferred prompt is spent either way, and
+// there's nothing left to offer.
+window.addEventListener("appinstalled", () => {
+  installButtonEl.hidden = true;
+  deferredInstallPrompt = null;
+});
+
+// iOS Safari has no beforeinstallprompt/appinstalled events at all - the
+// only "Add to Home Screen" path there is the manual Share-sheet one, so
+// this shows a static instruction instead of a button when running on an
+// iPhone/iPad that isn't already installed.
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isStandalone =
+  window.matchMedia("(display-mode: standalone)").matches ||
+  (navigator as Navigator & { standalone?: boolean }).standalone === true;
+if (isIOS && !isStandalone) {
+  iosInstallHintEl.hidden = false;
+}
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").catch(() => {
+    // Best-effort: a failed registration only costs install eligibility
+    // and background reminders, never the ability to practice.
+  });
+}
 
 // The stats legend's swatches are static markup (unlike the grids, never
 // rebuilt), so this wiring runs once rather than per-render - each

@@ -43,23 +43,28 @@ const fullEngineState: EngineState = {
   practiceDayCount: 7,
 };
 
-const fullAppState: AppState = { engine: fullEngineState, lastMapShownDay: "2026-08-07", muted: true };
+const fullAppState: AppState = {
+  engine: fullEngineState,
+  lastMapShownDay: "2026-08-07",
+  muted: true,
+  remindersEnabled: true,
+};
 
 describe("saveState / loadState round trip", () => {
   it("returns null when nothing has been saved", () => {
     expect(loadState()).toBeNull();
   });
 
-  it("loads back exactly what was saved, including the fields added by ticket #10, #11's lastMapShownDay, #12's practiceDayCount, and #13's muted", () => {
+  it("loads back exactly what was saved, including the fields added by ticket #10, #11's lastMapShownDay, #12's practiceDayCount, #13's muted, and remindersEnabled", () => {
     saveState(fullAppState);
 
     expect(loadState()).toEqual(fullAppState);
   });
 
   it("round-trips a null lastMapShownDay (never shown yet)", () => {
-    saveState({ engine: fullEngineState, lastMapShownDay: null, muted: false });
+    saveState({ engine: fullEngineState, lastMapShownDay: null, muted: false, remindersEnabled: false });
 
-    expect(loadState()).toEqual({ engine: fullEngineState, lastMapShownDay: null, muted: false });
+    expect(loadState()).toEqual({ engine: fullEngineState, lastMapShownDay: null, muted: false, remindersEnabled: false });
   });
 
   it("stamps the saved payload with the current version", () => {
@@ -96,6 +101,7 @@ describe("migration", () => {
       },
       lastMapShownDay: null,
       muted: false,
+      remindersEnabled: false,
     });
   });
 
@@ -122,7 +128,12 @@ describe("migration", () => {
 
     const loaded = loadState();
 
-    expect(loaded).toEqual({ engine: { ...preTicket11Save, practiceDayCount: 0 }, lastMapShownDay: null, muted: false });
+    expect(loaded).toEqual({
+      engine: { ...preTicket11Save, practiceDayCount: 0 },
+      lastMapShownDay: null,
+      muted: false,
+      remindersEnabled: false,
+    });
   });
 
   // Simulates a save written before ticket #12 - has lastMapShownDay but
@@ -155,6 +166,26 @@ describe("migration", () => {
     const loaded = loadState();
 
     expect(loaded?.muted).toBe(true);
+  });
+
+  // Simulates a save written before the daily-reminder toggle existed -
+  // has muted but predates remindersEnabled entirely.
+  const preReminderSave = { ...preTicket13Save, muted: false };
+
+  it("defaults remindersEnabled to false for a save that predates the toggle - opt-in only, never sprung on an existing save", () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(preReminderSave));
+
+    const loaded = loadState();
+
+    expect(loaded?.remindersEnabled).toBe(false);
+  });
+
+  it("round-trips a true remindersEnabled flag from a save that already has it", () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...preReminderSave, remindersEnabled: true }));
+
+    const loaded = loadState();
+
+    expect(loaded?.remindersEnabled).toBe(true);
   });
 
   it("discards a save missing core (pre-ticket-#10) fields rather than half-migrating it", () => {
