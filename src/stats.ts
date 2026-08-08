@@ -39,26 +39,26 @@ export function accuracyBucket(correctShare: number): RampBucket {
 
 // A Fact's own target: the fixed progression bar (ADR 0001) plus its
 // personal typing allowance (CONTEXT.md) - the same target isMastered
-// compares against, so speedRatio's 1.0 boundary lines up exactly with
+// compares against, so fluencyRatio's 1.0 boundary lines up exactly with
 // the Mastered line (ticket #12's central requirement).
-export function speedTargetMs(fact: Fact): number {
+export function fluencyTargetMs(fact: Fact): number {
   return TARGET_SPEED_MS + typingAllowanceMs(fact.a * fact.b);
 }
 
-// currentFluencyMs / target - the DECAYED value, so the speed grid can
+// currentFluencyMs / target - the DECAYED value, so the Fluency grid can
 // never disagree with isMastered or the Progress map about what "fast"
 // means (ticket #12: "so the grid and the Progress map indicator can
 // never disagree").
-export function speedRatio(fact: Fact, fluency: FluencyRecord | undefined, now: number): number {
-  return currentFluencyMs(fluency, now) / speedTargetMs(fact);
+export function fluencyRatio(fact: Fact, fluency: FluencyRecord | undefined, now: number): number {
+  return currentFluencyMs(fluency, now) / fluencyTargetMs(fact);
 }
 
-// Ticket #12's speed buckets: <0.6, 0.6-0.8, 0.8-1.0 || 1.0-1.5, >1.5.
+// Ticket #12's Fluency buckets: <0.6, 0.6-0.8, 0.8-1.0 || 1.0-1.5, >1.5.
 // The break sits at exactly 1.0 via the `< 1.0` / else-`< 1.5` split, so
 // a Fact whose ratio is precisely 1.0 lands on the "not yet Mastered"
 // side of the boundary - the same side isMastered's strict `< target`
 // (i.e. ratio strictly less than 1.0) puts it on.
-export function speedBucket(ratio: number): RampBucket {
+export function fluencyBucket(ratio: number): RampBucket {
   if (ratio < 0.6) return 4;
   if (ratio < 0.8) return 3;
   if (ratio < 1.0) return 2;
@@ -87,7 +87,7 @@ function isInRange(fact: Fact, activeRangeSize: number): boolean {
   return fact.a <= activeRangeSize && fact.b <= activeRangeSize;
 }
 
-// Shared skeleton behind classifyAccuracyCell, classifySpeedCell, and
+// Shared skeleton behind classifyAccuracyCell, classifyFluencyCell, and
 // factTooltipText: whether a Fact is outside the Active range, has never
 // been attempted, or has been attempted but never once answered
 // correctly means the same thing regardless of which grid (or the
@@ -106,7 +106,7 @@ function classifyShared(
   // Checked before bucketing on purpose (ADR 0004): "attempted but never
   // once correct" is the page's most actionable signal and must render
   // as amber on BOTH grids, never get folded into whatever bucket a
-  // (possibly stale/decayed, possibly nonexistent) speed ratio would
+  // (possibly stale/decayed, possibly nonexistent) Fluency ratio would
   // otherwise land it in.
   if (accuracy.correctShare === 0) return { kind: "neverCorrect" };
 
@@ -119,15 +119,15 @@ export function classifyAccuracyCell(fact: Fact, state: Pick<EngineState, "activ
   return { kind: "value", bucket: accuracyBucket(shared.accuracy.correctShare), provisional: shared.provisional };
 }
 
-export function classifySpeedCell(
+export function classifyFluencyCell(
   fact: Fact,
   state: Pick<EngineState, "activeRange" | "accuracy" | "fluency">,
   now: number,
 ): CellState {
   const shared = classifyShared(fact, state);
   if (shared.kind !== "value") return shared;
-  const ratio = speedRatio(fact, state.fluency[factKey(fact)], now);
-  return { kind: "value", bucket: speedBucket(ratio), provisional: shared.provisional };
+  const ratio = fluencyRatio(fact, state.fluency[factKey(fact)], now);
+  return { kind: "value", bucket: fluencyBucket(ratio), provisional: shared.provisional };
 }
 
 // The tap/hover tooltip's text (ADR 0004: "Per-Fact numbers live in a

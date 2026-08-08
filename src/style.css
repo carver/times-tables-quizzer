@@ -5,7 +5,7 @@
 
   /* Statistics screen (ticket #12 / ADR 0004): two single-hue ramps,
      five steps each, darker = better - Accuracy on orange (--acc-1..5),
-     speed on blue (--speed-1..5). `color-scheme: light dark` above
+     Fluency on blue (--fluency-1..5). `color-scheme: light dark` above
      leaves the actual surface up to the browser/OS, which the palette
      validator can't check against - so the grids render on an explicit,
      pinned surface (--stats-surface) instead, with these exact ramp
@@ -20,11 +20,11 @@
   --acc-3: #c55121;
   --acc-4: #9f3600;
   --acc-5: #771f00;
-  --speed-1: #7ab0f9;
-  --speed-2: #5593e6;
-  --speed-3: #306ebe;
-  --speed-4: #044b97;
-  --speed-5: #00296c;
+  --fluency-1: #7ab0f9;
+  --fluency-2: #5593e6;
+  --fluency-3: #306ebe;
+  --fluency-4: #044b97;
+  --fluency-5: #00296c;
   /* "Attempted, never once correct" (ADR 0004) - deliberately NOT part
      of either ramp, and validated (all-pairs CVD + normal-vision ΔE)
      against both ramps' weakest step so it never reads as "just another
@@ -50,11 +50,11 @@
     --acc-3: #dd673a;
     --acc-4: #f5845a;
     --acc-5: #ffa07c;
-    --speed-1: #215596;
-    --speed-2: #3674c5;
-    --speed-3: #4f93ec;
-    --speed-4: #68acff;
-    --speed-5: #8bc7ff;
+    --fluency-1: #215596;
+    --fluency-2: #3674c5;
+    --fluency-3: #4f93ec;
+    --fluency-4: #68acff;
+    --fluency-5: #8bc7ff;
     --amber: #ab7900;
   }
 }
@@ -457,20 +457,20 @@ body {
 .legend-swatch[data-acc="4"] {
   background: var(--acc-5);
 }
-.legend-swatch[data-speed="0"] {
-  background: var(--speed-1);
+.legend-swatch[data-fluency="0"] {
+  background: var(--fluency-1);
 }
-.legend-swatch[data-speed="1"] {
-  background: var(--speed-2);
+.legend-swatch[data-fluency="1"] {
+  background: var(--fluency-2);
 }
-.legend-swatch[data-speed="2"] {
-  background: var(--speed-3);
+.legend-swatch[data-fluency="2"] {
+  background: var(--fluency-3);
 }
-.legend-swatch[data-speed="3"] {
-  background: var(--speed-4);
+.legend-swatch[data-fluency="3"] {
+  background: var(--fluency-4);
 }
-.legend-swatch[data-speed="4"] {
-  background: var(--speed-5);
+.legend-swatch[data-fluency="4"] {
+  background: var(--fluency-5);
 }
 .legend-swatch--empty {
   background: var(--stats-surface);

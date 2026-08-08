@@ -13,7 +13,7 @@ import { loadState, saveState, type AppState } from "./persistence";
 import { computeProgressMapStatus, type ProgressHighWaterMark, type ProgressReadout } from "./progressMap";
 import { decideLanding, hashForRoute, routeFromHash, type Route } from "./route";
 import { createInitialScreen, pressBackspace, pressDigit, pressEnter, type ScreenState } from "./screen";
-import { classifyAccuracyCell, classifySpeedCell, factTooltipText, type CellState } from "./stats";
+import { classifyAccuracyCell, classifyFluencyCell, factTooltipText, type CellState } from "./stats";
 
 const INITIAL_ACTIVE_RANGE = { size: 5 };
 const deps: Dependencies = { random: Math.random, now: Date.now };
@@ -137,17 +137,17 @@ getEl<HTMLDivElement>("app").innerHTML = `
         </div>
       </section>
 
-      <section class="stats-section" aria-labelledby="speed-heading">
-        <h2 class="stats-heading" id="speed-heading">Speed</h2>
+      <section class="stats-section" aria-labelledby="fluency-heading">
+        <h2 class="stats-heading" id="fluency-heading">Fluency</h2>
         <ul class="stats-legend">
-          <li><span class="legend-swatch" data-speed="0"></span>&gt;1.5×</li>
-          <li><span class="legend-swatch" data-speed="1"></span>1.0–1.5×</li>
-          <li><span class="legend-swatch" data-speed="2"></span>0.8–1.0×</li>
-          <li><span class="legend-swatch" data-speed="3"></span>0.6–0.8×</li>
-          <li><span class="legend-swatch" data-speed="4"></span>&lt;0.6×</li>
+          <li><span class="legend-swatch" data-fluency="0"></span>&gt;1.5×</li>
+          <li><span class="legend-swatch" data-fluency="1"></span>1.0–1.5×</li>
+          <li><span class="legend-swatch" data-fluency="2"></span>0.8–1.0×</li>
+          <li><span class="legend-swatch" data-fluency="3"></span>0.6–0.8×</li>
+          <li><span class="legend-swatch" data-fluency="4"></span>&lt;0.6×</li>
         </ul>
         <div class="stats-grid-wrap">
-          <div class="stats-grid" id="speed-grid" role="group" aria-label="Speed grid, 12 by 12 Facts"></div>
+          <div class="stats-grid" id="fluency-grid" role="group" aria-label="Fluency grid, 12 by 12 Facts"></div>
         </div>
       </section>
 
@@ -200,7 +200,7 @@ const statsScreenEl = getEl<HTMLElement>("screen-stats");
 const statsDaysEl = getEl<HTMLParagraphElement>("stats-days");
 const statsStreakEl = getEl<HTMLParagraphElement>("stats-streak");
 const accuracyGridEl = getEl<HTMLDivElement>("accuracy-grid");
-const speedGridEl = getEl<HTMLDivElement>("speed-grid");
+const fluencyGridEl = getEl<HTMLDivElement>("fluency-grid");
 const statsTooltipEl = getEl<HTMLDivElement>("stats-tooltip");
 
 const loaded: AppState = loadState() ?? { engine: createInitialState(INITIAL_ACTIVE_RANGE, deps), lastMapShownDay: null, muted: false };
@@ -331,11 +331,11 @@ function statsCellClass(state: CellState): string {
 }
 
 // Builds one 12x12 grid of cell buttons. `varPrefix` picks which ramp's
-// CSS custom properties (--acc-1..5 or --speed-1..5, style.css) a
+// CSS custom properties (--acc-1..5 or --fluency-1..5, style.css) a
 // "value" cell's bucket resolves to - the bucket→color mapping itself
 // lives entirely in CSS so light/dark mode swap for free (ADR 0004:
 // dark steps are their own validated set, not the light ramp flipped).
-function buildStatsGrid(container: HTMLDivElement, varPrefix: "acc" | "speed", classify: (fact: Fact) => CellState) {
+function buildStatsGrid(container: HTMLDivElement, varPrefix: "acc" | "fluency", classify: (fact: Fact) => CellState) {
   const { engine } = quizState;
   const now = deps.now();
   container.innerHTML = "";
@@ -406,7 +406,7 @@ function renderStats() {
   statsStreakEl.textContent = `Streak: ${dayCount(count)}`;
 
   buildStatsGrid(accuracyGridEl, "acc", (fact) => classifyAccuracyCell(fact, engine));
-  buildStatsGrid(speedGridEl, "speed", (fact) => classifySpeedCell(fact, engine, deps.now()));
+  buildStatsGrid(fluencyGridEl, "fluency", (fact) => classifyFluencyCell(fact, engine, deps.now()));
 }
 
 function renderQuiz() {
