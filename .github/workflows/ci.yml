@@ -65,8 +65,13 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      # enablement: true turns Pages on for the repo on first run, so
-      # this doesn't need a human to flip the setting by hand first.
+      # enablement: true asks the action to turn Pages on itself. On this
+      # repo that call comes back "Resource not accessible by
+      # integration" - creating a Pages site needs repo admin, which the
+      # workflow token doesn't have - so Pages has to be switched on once
+      # by hand under Settings > Pages > Source: GitHub Actions. It's kept
+      # set because it costs nothing once Pages exists, and it means a
+      # fork whose token does have the rights needs no manual step.
       - uses: actions/configure-pages@v5
         with:
           enablement: true
