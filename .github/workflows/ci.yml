@@ -63,7 +63,20 @@ jobs:
           cache: npm
 
       - run: npm ci
+      # Bakes real Firebase config into the deployed build so the live
+      # site can actually sync (docs/adr/0006), not just local dev - only
+      # meaningful once these repo variables are set; until then they're
+      # empty and cloudSync.ts falls back to its "demo-" project default
+      # (harmless: it just means the deployed site's sync toggle can't
+      # reach a real backend yet). Repo *variables*, not secrets - a
+      # Firebase web config is public by design (access control is
+      # Firestore Security Rules' job, not hiding these values).
       - run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
 
       # enablement: true asks the action to turn Pages on itself. On this
       # repo that call comes back "Resource not accessible by
