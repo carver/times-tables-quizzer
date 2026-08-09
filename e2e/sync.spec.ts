@@ -213,6 +213,46 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await ctxB.close();
   });
 
+  test("Start a new profile creates a fresh, separate Profile and the switcher can hop back to the original", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.click("#practice-link");
+    await answerWithKeypad(page, await promptedAnswer(page));
+    await page.click("#map-link");
+
+    await page.click("#sync-button");
+    await page.click("#start-sharing-button");
+    await expect(page.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
+    const originalProfileId = await activeProfileId(page);
+    const originalState = await readEngineState(page);
+    expect(originalState.streak.count).toBe(1);
+
+    await page.click("#new-profile-button");
+    await page.fill("#new-profile-name-input", "Sam");
+    await page.click("#new-profile-confirm-button");
+
+    // The new Profile is active immediately - a genuinely fresh
+    // EngineState, not the original's progress carried over.
+    await expect(page.locator("#sync-button")).toContainText("Sam", { timeout: SYNC_TIMEOUT_MS });
+    const newProfileId = await activeProfileId(page);
+    expect(newProfileId).not.toBe(originalProfileId);
+    const freshState = await readEngineState(page);
+    expect(freshState.activeRange.size).toBe(2);
+    expect(freshState.streak.count).toBe(0);
+
+    // The original Profile is still paired, not replaced - the whole
+    // point being "switch back easily" rather than a one-way move.
+    await expect(page.locator("#profile-switcher")).toContainText("Sam");
+    await expect(page.locator("#profile-switcher")).toContainText("Shared progress");
+    await page.click('#profile-switcher button:has-text("Shared progress")');
+
+    await expect(page.locator("#sync-button")).toContainText("Shared progress", { timeout: SYNC_TIMEOUT_MS });
+    const restoredState = await readEngineState(page);
+    expect(restoredState.streak.count).toBe(1);
+    expect(restoredState.fact).toEqual(originalState.fact);
+  });
+
   test("Stop syncing detaches this device but leaves its local progress untouched", async ({ page }) => {
     await page.goto("/");
     await page.click("#sync-button");

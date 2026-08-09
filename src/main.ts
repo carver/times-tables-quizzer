@@ -126,6 +126,11 @@ getEl<HTMLDivElement>("app").innerHTML = `
           <button type="button" class="sync-action" id="copy-sync-link-button">Copy sync link to share</button>
           <button type="button" class="sync-action" id="show-qr-button">Show QR code</button>
           <div class="qr-code-wrap" id="qr-code-wrap" hidden></div>
+          <button type="button" class="sync-action" id="new-profile-button">Start a new profile</button>
+          <div id="new-profile-form" hidden>
+            <input type="text" class="sync-input" id="new-profile-name-input" placeholder='Name this profile (e.g. "Sam")' />
+            <button type="button" class="sync-action" id="new-profile-confirm-button">Create</button>
+          </div>
           <div id="profile-switcher-wrap" hidden>
             <p class="settings-hint">Switch profile:</p>
             <div id="profile-switcher"></div>
@@ -301,6 +306,10 @@ const syncStatusEl = getEl<HTMLParagraphElement>("sync-status");
 const copySyncLinkButtonEl = getEl<HTMLButtonElement>("copy-sync-link-button");
 const showQrButtonEl = getEl<HTMLButtonElement>("show-qr-button");
 const qrCodeWrapEl = getEl<HTMLDivElement>("qr-code-wrap");
+const newProfileButtonEl = getEl<HTMLButtonElement>("new-profile-button");
+const newProfileFormEl = getEl<HTMLDivElement>("new-profile-form");
+const newProfileNameInputEl = getEl<HTMLInputElement>("new-profile-name-input");
+const newProfileConfirmButtonEl = getEl<HTMLButtonElement>("new-profile-confirm-button");
 const profileSwitcherWrapEl = getEl<HTMLDivElement>("profile-switcher-wrap");
 const profileSwitcherEl = getEl<HTMLDivElement>("profile-switcher");
 const stopSyncingButtonEl = getEl<HTMLButtonElement>("stop-syncing-button");
@@ -507,6 +516,8 @@ function renderSyncPanel() {
   qrCodeWrapEl.hidden = true;
   qrCodeWrapEl.innerHTML = "";
   showQrButtonEl.textContent = "Show QR code";
+  newProfileFormEl.hidden = true;
+  newProfileNameInputEl.value = "";
 
   if (profile) {
     syncButtonEl.textContent = `🔗 Synced: ${profile.label}`;
@@ -566,6 +577,37 @@ async function switchToProfile(profileId: string): Promise<void> {
   startSyncing(profileId);
   renderSyncPanel();
   applyRoute(routeFromHash(window.location.hash));
+}
+
+// Unlike "Start sharing" (which publishes *this device's* current
+// progress so another device can join it), this is for a second Learner
+// starting from nothing: a genuinely fresh EngineState goes up as a new
+// Profile, this device pairs with it and switches over, and the
+// previous Profile stays paired - one tap away in the switcher above -
+// rather than being replaced or left behind.
+async function startNewProfile(rawLabel: string): Promise<void> {
+  const label = rawLabel.trim();
+  if (!label) {
+    showSyncHint("Give the new profile a name first.");
+    return;
+  }
+
+  const profileId = generateProfileId();
+  const mod = await loadCloudSync();
+  const freshState = createInitialState(INITIAL_ACTIVE_RANGE, deps);
+  const success = await mod.writeProfile(profileId, freshState);
+  if (!success) {
+    showSyncHint("Couldn't reach the sync service - check your connection and try again.");
+    return;
+  }
+
+  addPairedProfile({ profileId, label });
+  quizState = createInitialScreen(freshState, deps);
+  persist();
+  startSyncing(profileId);
+  renderSyncPanel();
+  applyRoute(routeFromHash(window.location.hash));
+  showSyncHint(`Started a new profile: "${label}". Switch back anytime from the switcher below.`);
 }
 
 function completeJoin(profileId: string, remoteEngine: EngineState) {
@@ -1211,6 +1253,15 @@ startSharingButtonEl.addEventListener("click", () => {
     renderSyncPanel();
     showSyncHint('Ready — tap "Copy sync link to share" and send it to the other phone.');
   })();
+});
+
+newProfileButtonEl.addEventListener("click", () => {
+  newProfileFormEl.hidden = !newProfileFormEl.hidden;
+  if (!newProfileFormEl.hidden) newProfileNameInputEl.focus();
+});
+
+newProfileConfirmButtonEl.addEventListener("click", () => {
+  void startNewProfile(newProfileNameInputEl.value);
 });
 
 joinButtonEl.addEventListener("click", () => {
