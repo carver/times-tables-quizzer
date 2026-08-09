@@ -23,6 +23,19 @@ async function readEngineState(page: Page) {
 // default "demo-times-tables-quizzer" project ID only ever talks to it,
 // never a real cloud project, so no account/credentials are needed to
 // run this suite.
+//
+// Every "Synced" assertion below waits up to SYNC_TIMEOUT_MS, well past
+// Playwright's 5s default: the Firestore/Auth emulator's own JVM cold
+// start (playwright.config.ts's comment on the Auth port having a ~20s
+// warm-up) can still be settling when the very first sign-in + write in
+// a run lands, even though the webServer health check already reported
+// both emulators "up" - "accepting connections" and "fast enough for a
+// real request" turned out not to be the same thing here. In the full
+// suite this cost is usually hidden (app.spec.ts's other tests run
+// first and incidentally finish warming the emulator up), but this file
+// needs to be reliable running alone too.
+const SYNC_TIMEOUT_MS = 20_000;
+
 test.describe("cross-device sync (docs/adr/0006)", () => {
   test("Start sharing pairs this device, and a fresh device opening the link joins with matching progress", async ({
     browser,
@@ -36,7 +49,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
 
     await pageA.click("#sync-button");
     await pageA.click("#start-sharing-button");
-    await expect(pageA.locator("#sync-button")).toContainText("Synced");
+    await expect(pageA.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
 
     const profileId = await activeProfileId(pageA);
     const stateA = await readEngineState(pageA);
@@ -44,7 +57,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     const ctxB = await browser.newContext();
     const pageB = await ctxB.newPage();
     await pageB.goto(`/#/join/${profileId}`);
-    await expect(pageB.locator("#sync-button")).toContainText("Synced", { timeout: 10_000 });
+    await expect(pageB.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
 
     const stateB = await readEngineState(pageB);
     expect(stateB.fact).toEqual(stateA.fact);
@@ -62,7 +75,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await pageA.goto("/");
     await pageA.click("#sync-button");
     await pageA.click("#start-sharing-button");
-    await expect(pageA.locator("#sync-button")).toContainText("Synced");
+    await expect(pageA.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
     const profileId = await activeProfileId(pageA);
 
     const ctxC = await browser.newContext();
@@ -86,7 +99,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await pageC.click("#join-button");
     await expect(pageC.locator("#sync-confirm")).toBeVisible();
     await pageC.click("#sync-confirm-yes");
-    await expect(pageC.locator("#sync-button")).toContainText("Synced");
+    await expect(pageC.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
     // Device A's shared profile never actually answered anything, so
     // joining genuinely replaced Device C's own streak of 1.
     expect((await readEngineState(pageC)).streak.count).toBe(0);
@@ -101,7 +114,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await pageA.goto("/");
     await pageA.click("#sync-button");
     await pageA.click("#start-sharing-button");
-    await expect(pageA.locator("#sync-button")).toContainText("Synced");
+    await expect(pageA.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
     const profileId = await activeProfileId(pageA);
 
     const ctxB = await browser.newContext();
@@ -112,7 +125,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await pageB.click("#join-button");
 
     await expect(pageB.locator("#sync-confirm")).toBeHidden();
-    await expect(pageB.locator("#sync-button")).toContainText("Synced", { timeout: 10_000 });
+    await expect(pageB.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
 
     await ctxA.close();
     await ctxB.close();
@@ -122,7 +135,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await page.goto("/");
     await page.click("#sync-button");
     await page.click("#start-sharing-button");
-    await expect(page.locator("#sync-button")).toContainText("Synced");
+    await expect(page.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
 
     await page.click("#stop-syncing-button");
 
@@ -137,7 +150,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await page.goto("/");
     await page.click("#sync-button");
     await page.click("#start-sharing-button");
-    await expect(page.locator("#sync-button")).toContainText("Synced");
+    await expect(page.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
 
     await page.goto("/#/reset");
     await page.click("#reset-confirm");

@@ -18,12 +18,21 @@ export default defineConfig({
     trace: "on-first-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  // Tests run against the production build, not the dev server: it's the
-  // artifact that actually gets deployed, and `base: "./"` in
-  // vite.config.ts means this is byte-for-byte what Pages serves.
+  // Tests run against a real build, not the dev server - it's the same
+  // artifact that actually gets deployed (`base: "./"` in vite.config.ts
+  // means this is byte-for-byte what Pages serves), just built in "test"
+  // mode rather than plain `npm run build`'s default "production" mode.
+  // That distinction matters once a real Firebase project exists
+  // (scripts/setup_firebase.py writes its config to `.env.production`,
+  // loaded only by Vite's "production" mode): building in "test" mode
+  // here means these specs always exercise cloudSync.ts's "demo-"
+  // emulator default, never a real project a developer happens to have
+  // configured locally - discovered the hard way when a real
+  // `.env.production` on a dev machine made this suite start trying to
+  // sign in against the real Firebase Auth API instead of the emulator.
   webServer: [
     {
-      command: `npm run build && npm run preview -- --port ${PORT} --strictPort`,
+      command: `npm run build -- --mode test && npm run preview -- --port ${PORT} --strictPort`,
       url: `http://localhost:${PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

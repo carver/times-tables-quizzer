@@ -36,7 +36,7 @@ __pycache__/
 # stay tracked - see docs/adr/0006)
 .env
 .env.*
-!.env.example
+!.env.production.example
 .firebase/
 firestore-debug.log
 firebase-debug.log

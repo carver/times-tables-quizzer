@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 export const STORAGE_KEY = "times-tables-quizzer:state";
 
@@ -97,8 +97,29 @@ export async function answerWithKeypad(page: Page, answer: number): Promise<void
 
 // The product the prompt is currently asking for, read off the screen so
 // specs never have to predict which Fact the weighted selection picks.
+//
+// Reads and parses inside a single retried block (expect(...).toPass())
+// rather than an assertion-then-separate-read: a caller that navigates to
+// the quiz via a real click - a hashchange event, handled asynchronously
+// (main.ts's own boot comment notes this) - can otherwise have the DOM
+// still mid-transition (blank, or between renders) right as it's read.
+// An earlier version asserted "#prompt contains '?'" and then read its
+// text in a second, separate call - but a render landing in the gap
+// between those two reads meant the assertion could pass against one
+// paint and the read could still land on a blank or stale one right
+// after, parsing NaN and silently going on to press a "NaN" digit that
+// doesn't exist. Retrying the read-and-parse as one atomic unit closes
+// that gap: any attempt that doesn't yield two real digits throws and is
+// retried, never returned. Fast/local machines rarely hit the original
+// gap; a loaded CI runner does.
 export async function promptedAnswer(page: Page): Promise<number> {
-  const text = (await page.locator("#prompt").textContent()) ?? "";
-  const [a, b] = (text.match(/\d+/g) ?? []).map(Number);
-  return a * b;
+  let product = NaN;
+  await expect(async () => {
+    const text = (await page.locator("#prompt").textContent()) ?? "";
+    const match = text.match(/\d+/g);
+    if (!match || match.length < 2) throw new Error(`prompt not ready yet: ${JSON.stringify(text)}`);
+    const [a, b] = match.map(Number);
+    product = a * b;
+  }).toPass();
+  return product;
 }

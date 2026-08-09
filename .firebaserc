@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "demo-times-tables-quizzer"
-  }
+    "default": "demo-times-tables-quizzer",
+    "production": "times-tables-quizzer"
+  },
+  "targets": {},
+  "etags": {}
 }

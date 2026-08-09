@@ -34,7 +34,14 @@ def _c(code: str) -> str:
 BOLD, DIM, RESET = _c("\033[1m"), _c("\033[2m"), _c("\033[0m")
 BLUE, GREEN, YELLOW = _c("\033[34m"), _c("\033[32m"), _c("\033[33m")
 
-ENV_FILE = Path(os.environ.get("ENV_FILE", ".env"))
+# .env.production specifically, not .env - Vite only loads
+# .env.production in "production" mode (plain `npm run build`), so local
+# dev/test commands (npm run dev, test:e2e, test:rules), which build/run
+# in other modes on purpose, keep defaulting to the emulator regardless
+# of this file existing. A bare `.env` would instead apply to every
+# mode, silently pointing local dev at the real project too - see
+# .env.production.example and docs/adr/0006.
+ENV_FILE = Path(os.environ.get("ENV_FILE", ".env.production"))
 WRITTEN_ENV: list[str] = []
 WRITTEN_SECRET: list[str] = []
 SKIPPED: list[str] = []
@@ -337,14 +344,14 @@ def main() -> None:
             SKIPPED.append("firebase login && firebase use --add && firebase deploy --only firestore:rules (run by hand later)")
 
     stage("Verify")
-    say("Sanity-checks that .env's new values actually produce a working build -")
+    say("Sanity-checks that .env.production's new values actually produce a working build -")
     say("does NOT start the preview server here, so this wizard can still show its")
     say("closing summary afterward rather than blocking on a long-running process.")
     if confirm("Run 'npm run build' now?"):
         if run("npm", "run", "build"):
             note("Build succeeded with the real config.")
         else:
-            SKIPPED.append("npm run build failed - check the error above before trusting .env")
+            SKIPPED.append("npm run build failed - check the error above before trusting .env.production")
     else:
         note("Skipped - you can build any time with: npm run build")
     say("To actually verify sync end-to-end:")
@@ -355,10 +362,10 @@ def main() -> None:
     open_url("https://console.firebase.google.com/project/_/firestore/data")
 
     finish()
-    note("Local dev (.env) and the live GitHub Pages deploy (repo variables) are both")
+    note("Local dev (.env.production) and the live GitHub Pages deploy (repo variables) are both")
     note("wired to the real project now. Emulator-based dev/tests (npm run dev with")
     note("the emulator running, npm run test:rules, npm run test:e2e) are untouched -")
-    note("they still default to the emulator project regardless of .env.")
+    note("they still default to the emulator project regardless of .env.production - see the ADR.")
 
 
 if __name__ == "__main__":
