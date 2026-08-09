@@ -120,6 +120,8 @@ getEl<HTMLDivElement>("app").innerHTML = `
         <div id="sync-paired-actions" hidden>
           <p class="sync-status" id="sync-status"></p>
           <button type="button" class="sync-action" id="copy-sync-link-button">Copy sync link to share</button>
+          <button type="button" class="sync-action" id="show-qr-button">Show QR code</button>
+          <div class="qr-code-wrap" id="qr-code-wrap" hidden></div>
           <div id="profile-switcher-wrap" hidden>
             <p class="settings-hint">Switch profile:</p>
             <div id="profile-switcher"></div>
@@ -271,6 +273,8 @@ const joinCodeInputEl = getEl<HTMLInputElement>("join-code-input");
 const joinButtonEl = getEl<HTMLButtonElement>("join-button");
 const syncStatusEl = getEl<HTMLParagraphElement>("sync-status");
 const copySyncLinkButtonEl = getEl<HTMLButtonElement>("copy-sync-link-button");
+const showQrButtonEl = getEl<HTMLButtonElement>("show-qr-button");
+const qrCodeWrapEl = getEl<HTMLDivElement>("qr-code-wrap");
 const profileSwitcherWrapEl = getEl<HTMLDivElement>("profile-switcher-wrap");
 const profileSwitcherEl = getEl<HTMLDivElement>("profile-switcher");
 const stopSyncingButtonEl = getEl<HTMLButtonElement>("stop-syncing-button");
@@ -458,6 +462,14 @@ function showSyncHint(text: string) {
 // pattern renderMuteToggle/renderReminderToggle already use.
 function renderSyncPanel() {
   const profile = activeProfile();
+
+  // Never leave a stale QR (or "Hide QR code" label) on screen for a
+  // Profile that's no longer active - e.g. after switching or stopping
+  // sync. Cheap to always reset here rather than track "which Profile is
+  // this QR actually for."
+  qrCodeWrapEl.hidden = true;
+  qrCodeWrapEl.innerHTML = "";
+  showQrButtonEl.textContent = "Show QR code";
 
   if (profile) {
     syncButtonEl.textContent = `🔗 Synced: ${profile.label}`;
@@ -1123,6 +1135,31 @@ copySyncLinkButtonEl.addEventListener("click", () => {
   } else {
     showSyncHint(`Copy this link and send it to the other phone: ${link}`);
   }
+});
+
+// A phone's camera app decodes a URL-shaped QR straight into "open this
+// link" - which lands on the join flow (route.ts's joinProfileIdFromHash)
+// with no typing/pasting step at all, unlike "Copy sync link". Toggle
+// rather than a one-shot reveal, matching the sync panel's own
+// open/closed button; qrcode-generator is loaded lazily here too (see
+// pairingQrCode.ts's own comment) so it never ships to a household that
+// only ever uses the text-link path.
+showQrButtonEl.addEventListener("click", () => {
+  void (async () => {
+    if (!qrCodeWrapEl.hidden) {
+      qrCodeWrapEl.hidden = true;
+      showQrButtonEl.textContent = "Show QR code";
+      return;
+    }
+
+    const profile = activeProfile();
+    if (!profile) return;
+    const link = pairingLinkForProfile(profile.profileId);
+    const { pairingQrCodeSvg } = await import("./pairingQrCode");
+    qrCodeWrapEl.innerHTML = pairingQrCodeSvg(link);
+    qrCodeWrapEl.hidden = false;
+    showQrButtonEl.textContent = "Hide QR code";
+  })();
 });
 
 // Detaches this device from its Profile - the Profile itself, and any

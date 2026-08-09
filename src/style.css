@@ -468,6 +468,34 @@ body {
   gap: 0.35rem;
 }
 
+/* Fixed white background regardless of light/dark mode - a QR code's
+   scan reliability depends on real light/dark contrast between its
+   modules and their background, which a dark-mode surface would erode
+   (qrcode-generator draws modules in `currentColor`/black, assuming a
+   light backdrop). Padding is the code's quiet zone - most scanners
+   need clear space around the pattern to lock onto it. */
+.qr-code-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+  background: white;
+  border-radius: 8px;
+}
+
+/* `[hidden]` and `.qr-code-wrap` are equal-specificity selectors, so
+   without this the class's own `display: flex` above wins the cascade
+   tie and the element stays visible even with the `hidden` attribute set
+   (the same fix `.sync-confirm[hidden]` already needed, above). */
+.qr-code-wrap[hidden] {
+  display: none;
+}
+
+.qr-code-wrap svg {
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+}
+
 /* Confirmation for "Join existing" replacing this device's own history
    (docs/adr/0006) - a small centered card over a dim backdrop, distinct
    from the Celebration takeover (.takeover) so the two visually

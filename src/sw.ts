@@ -31,13 +31,17 @@ self.skipWaiting();
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
-// The cloudSync chunk (Firebase's SDK) is excluded from the precache
-// manifest above on purpose (vite.config.ts's globIgnores) - it's only
-// ever downloaded by a device that actually dynamically imports it
-// (main.ts, once sync is turned on). This route just means that once a
-// device has fetched it, it's cached like everything else for offline
-// reuse - never fetched eagerly by every installed device up front.
-registerRoute(({ url }) => /\/cloudSync-.*\.js$/.test(url.pathname), new CacheFirst({ cacheName: "cloud-sync-chunk" }));
+// The cloudSync (Firebase) and pairingQrCode chunks are excluded from
+// the precache manifest above on purpose (vite.config.ts's globIgnores)
+// - each is only ever downloaded by a device that actually dynamically
+// imports it (main.ts, once sync is turned on / "Show QR code" is
+// tapped). This route just means that once a device has fetched either,
+// it's cached like everything else for offline reuse - never fetched
+// eagerly by every installed device up front.
+registerRoute(
+  ({ url }) => /\/(cloudSync|pairingQrCode)-.*\.js$/.test(url.pathname),
+  new CacheFirst({ cacheName: "lazy-chunk" }),
+);
 
 const REMINDER_TAG = "daily-reminder";
 const REMINDER_ICON = "icons/icon-any-192.png";

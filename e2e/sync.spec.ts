@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { answerWithKeypad, promptedAnswer } from "./helpers";
 
@@ -16,6 +17,42 @@ async function activeProfileId(page: Page): Promise<string> {
 async function readEngineState(page: Page) {
   const raw = await page.evaluate((key) => window.localStorage.getItem(key), STATE_KEY);
   return JSON.parse(raw!);
+}
+
+// jsQR (a real, independent decoder - a devDependency purely for this
+// check) confirms the on-screen QR actually scans as the expected link,
+// rather than just asserting some <svg> appeared. Injected into the page
+// rather than imported into this Node-side test file, since decoding
+// needs a real <canvas> to rasterize the rendered SVG into pixels first.
+const JSQR_SOURCE = readFileSync("node_modules/jsqr/dist/jsQR.js", "utf8");
+
+async function scanQrCode(page: Page): Promise<string | null> {
+  await page.addScriptTag({ content: JSQR_SOURCE });
+  return page.evaluate(async () => {
+    const svgEl = document.querySelector("#qr-code-wrap svg");
+    if (!svgEl) return null;
+    const svgUrl = URL.createObjectURL(
+      new Blob([new XMLSerializer().serializeToString(svgEl)], { type: "image/svg+xml" }),
+    );
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = svgUrl;
+    });
+
+    const size = 400;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "white"; // the SVG has no background of its own to draw over
+    ctx.fillRect(0, 0, size, size);
+    ctx.drawImage(img, 0, 0, size, size);
+    const imageData = ctx.getImageData(0, 0, size, size);
+    return (window as unknown as { jsQR: (data: Uint8ClampedArray, w: number, h: number) => { data: string } | null })
+      .jsQR(imageData.data, size, size)?.data ?? null;
+  });
 }
 
 // These specs run against the real Firebase Local Emulator Suite
@@ -57,6 +94,51 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     const ctxB = await browser.newContext();
     const pageB = await ctxB.newPage();
     await pageB.goto(`/#/join/${profileId}`);
+    await expect(pageB.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
+
+    const stateB = await readEngineState(pageB);
+    expect(stateB.fact).toEqual(stateA.fact);
+    expect(stateB.streak).toEqual(stateA.streak);
+
+    await ctxA.close();
+    await ctxB.close();
+  });
+
+  test("the QR code encodes the same link as 'Copy sync link', and scanning it (opening the decoded link) joins with matching progress", async ({
+    browser,
+  }) => {
+    const ctxA = await browser.newContext();
+    const pageA = await ctxA.newPage();
+    await pageA.goto("/");
+    await pageA.click("#practice-link");
+    await answerWithKeypad(pageA, await promptedAnswer(pageA));
+    await pageA.click("#map-link");
+
+    await pageA.click("#sync-button");
+    await pageA.click("#start-sharing-button");
+    await expect(pageA.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
+
+    await expect(pageA.locator("#show-qr-button")).toHaveText("Show QR code");
+    await pageA.click("#show-qr-button");
+    await expect(pageA.locator("#qr-code-wrap")).toBeVisible();
+    await expect(pageA.locator("#show-qr-button")).toHaveText("Hide QR code");
+
+    const profileId = await activeProfileId(pageA);
+    const scannedLink = await scanQrCode(pageA);
+    expect(scannedLink).toBe(await pageA.evaluate((id) => `${new URL(window.location.href).origin}/#/join/${id}`, profileId));
+
+    // Toggling again hides it rather than re-fetching/re-rendering.
+    await pageA.click("#show-qr-button");
+    await expect(pageA.locator("#qr-code-wrap")).toBeHidden();
+    await expect(pageA.locator("#show-qr-button")).toHaveText("Show QR code");
+
+    const stateA = await readEngineState(pageA);
+
+    // A phone's camera app scanning this QR just opens the decoded link -
+    // simulated here by literally navigating a fresh device to it.
+    const ctxB = await browser.newContext();
+    const pageB = await ctxB.newPage();
+    await pageB.goto(scannedLink!);
     await expect(pageB.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
 
     const stateB = await readEngineState(pageB);

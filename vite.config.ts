@@ -29,16 +29,17 @@ export default defineConfig({
         // This app is a handful of small hashed bundles, not worth
         // Workbox's default size ceiling warning.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        // The lazy-loaded cloudSync chunk (Firebase's SDK, ~175KB
-        // gzipped - see docs/adr/0006) is deliberately excluded from
+        // The app's dynamically-imported chunks - Firebase's SDK
+        // (cloudSync, ~175KB gzipped, docs/adr/0006) and the QR code
+        // generator (pairingQrCode) - are deliberately excluded from
         // eager precaching: Workbox's default globPatterns would
-        // otherwise have the service worker download it for every
+        // otherwise have the service worker download both for every
         // installed device up front, on first install, silently
-        // defeating the entire point of code-splitting it behind the
-        // opt-in sync toggle. sw.ts adds a runtime CacheFirst route for
-        // it instead, so it's still cached for offline use - just only
-        // after whichever device actually loads it once.
-        globIgnores: ["**/cloudSync-*.js"],
+        // defeating the entire point of code-splitting them behind the
+        // sync panel's own actions. sw.ts adds a runtime CacheFirst route
+        // for both instead, so each is still cached for offline use -
+        // just only after whichever device actually loads it once.
+        globIgnores: ["**/cloudSync-*.js", "**/pairingQrCode-*.js"],
       },
       // main.ts registers the service worker itself (see the
       // navigator.serviceWorker.register call) so it can be sequenced
