@@ -23,7 +23,18 @@ const STORAGE_KEY = "times-tables-quizzer:state";
 // Version 5 adds `remindersEnabled` - whether the Learner opted into the
 // daily-reminder notification. Defaults to false (opt-in, never sprung on
 // an existing save) same as a brand-new save.
-export const CURRENT_SAVE_VERSION = 5;
+// Version 6 lowers the starting Active range from 5x5 to 2x2 (a bigger,
+// earlier sense of accomplishment on the way to the first expansion). A
+// save from before this version that's still sitting at the old starting
+// size (5, with no rangeHistory entry - i.e. never expanded even once)
+// gets moved down to the new one; a save that already expanded past 5
+// keeps its earned progress untouched. This has to be gated on the save's
+// own `version` rather than just checking `size === 5`, or a brand-new
+// save that legitimately grows to size 5 would get knocked back down to
+// 2 on every subsequent load.
+export const CURRENT_SAVE_VERSION = 6;
+const PRE_V6_INITIAL_ACTIVE_RANGE_SIZE = 5;
+const NEW_INITIAL_ACTIVE_RANGE_SIZE = 2;
 
 // What the rest of the app actually works with: the engine's state plus
 // the pieces of app-level (not engine-domain) state that ride the same
@@ -79,8 +90,19 @@ function hasCoreEngineShape(value: Record<string, unknown>): boolean {
 function migrate(value: Record<string, unknown>): PersistedState | null {
   if (!hasCoreEngineShape(value)) return null;
 
+  const rawActiveRange = value.activeRange as EngineState["activeRange"];
+  const isPreV6Save = typeof value.version !== "number" || value.version < 6;
+  // rangeHistory only gains an entry when the Active range actually
+  // expands (engine.ts), so an empty/absent one alongside the old
+  // starting size means this save has sat untouched at 5 since it was
+  // created - not that it grew into 5 from something smaller.
+  const rawRangeHistory = isRecord(value.rangeHistory) ? value.rangeHistory : {};
+  const neverExpanded =
+    Object.keys(rawRangeHistory).length === 0 && rawActiveRange.size === PRE_V6_INITIAL_ACTIVE_RANGE_SIZE;
+  const activeRange = isPreV6Save && neverExpanded ? { size: NEW_INITIAL_ACTIVE_RANGE_SIZE } : rawActiveRange;
+
   return {
-    activeRange: value.activeRange as EngineState["activeRange"],
+    activeRange,
     fact: value.fact as EngineState["fact"],
     fluency: value.fluency as EngineState["fluency"],
     boosted: value.boosted as EngineState["boosted"],

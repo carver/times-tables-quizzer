@@ -188,6 +188,57 @@ describe("migration", () => {
     expect(loaded?.remindersEnabled).toBe(true);
   });
 
+  // Simulates a save written before version 6 (the 5x5 -> 2x2 starting
+  // grid change) that's still sitting exactly at the old starting size,
+  // having never expanded even once.
+  const preV6NeverExpandedSave = { ...preReminderSave, activeRange: { size: 5 }, rangeHistory: {} };
+
+  it("drops a pre-v6 save still at the old starting size (5, never expanded) down to the new starting size (2)", () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(preV6NeverExpandedSave));
+
+    const loaded = loadState();
+
+    expect(loaded?.engine.activeRange).toEqual({ size: 2 });
+  });
+
+  it("leaves a pre-v6 save alone if it already expanded past the old starting size", () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...preV6NeverExpandedSave, activeRange: { size: 8 }, rangeHistory: { 6: 100, 7: 200, 8: 300 } }),
+    );
+
+    const loaded = loadState();
+
+    expect(loaded?.engine.activeRange).toEqual({ size: 8 });
+  });
+
+  it("leaves a pre-v6 save alone if it genuinely grew into size 5 from something smaller (rangeHistory has an entry for 5)", () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...preV6NeverExpandedSave, activeRange: { size: 5 }, rangeHistory: { 5: 100 } }),
+    );
+
+    const loaded = loadState();
+
+    expect(loaded?.engine.activeRange).toEqual({ size: 5 });
+  });
+
+  // Guards against the regression this migration would otherwise cause:
+  // without the version gate, any future save that legitimately grows to
+  // size 5 (from the new starting size of 2) would get knocked back down
+  // to 2 on every subsequent load, since structurally it looks identical
+  // to a never-expanded pre-v6 save.
+  it("never re-drops a save that's already on version 6+, even if it happens to be sitting at size 5 with no rangeHistory", () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...preV6NeverExpandedSave, activeRange: { size: 5 }, rangeHistory: {}, version: CURRENT_SAVE_VERSION }),
+    );
+
+    const loaded = loadState();
+
+    expect(loaded?.engine.activeRange).toEqual({ size: 5 });
+  });
+
   it("discards a save missing core (pre-ticket-#10) fields rather than half-migrating it", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ fact: { a: 1, b: 2 } }));
 

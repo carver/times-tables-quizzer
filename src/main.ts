@@ -26,7 +26,11 @@ import { createInitialScreen, pressBackspace, pressDigit, pressEnter, restartFac
 import { classifyAccuracyCell, classifyFluencyCell, factTooltipText, type CellState } from "./stats";
 import { isRemoteUpdate, shouldApplyRemoteUpdate } from "./syncDecisions";
 
-const INITIAL_ACTIVE_RANGE = { size: 5 };
+// A smaller starting grid gives a bigger, earlier sense of accomplishment
+// on the way to the first expansion. Saves from before this changed carry
+// their own migration in persistence.ts's migrate() - see the version-6
+// comment there.
+const INITIAL_ACTIVE_RANGE = { size: 2 };
 const deps: Dependencies = { random: Math.random, now: Date.now };
 
 // Shared "N day(s)" pluralization for the map, quiz, and stats headers'
