@@ -485,7 +485,7 @@ body {
 /* `[hidden]` and `.qr-code-wrap` are equal-specificity selectors, so
    without this the class's own `display: flex` above wins the cascade
    tie and the element stays visible even with the `hidden` attribute set
-   (the same fix `.sync-confirm[hidden]` already needed, above). */
+   (the same fix `.modal-confirm[hidden]` already needed, above). */
 .qr-code-wrap[hidden] {
   display: none;
 }
@@ -496,15 +496,17 @@ body {
   height: auto;
 }
 
-/* Confirmation for "Join existing" replacing this device's own history
-   (docs/adr/0006) - a small centered card over a dim backdrop, distinct
-   from the Celebration takeover (.takeover) so the two visually
-   different kinds of "the whole screen pauses for this" moment - one
-   joyful, one a genuine heads-up - never look alike. Two layers (the
-   fixed, dimmed .sync-confirm backdrop and the centered .sync-confirm-card
-   itself) rather than one, since a single element can't both cover the
-   full screen AND be a small centered card. */
-.sync-confirm {
+/* Shared small-centered-card-over-a-dim-backdrop dialog, used by two
+   unrelated moments that both need "the whole screen pauses for this"
+   without looking like the Celebration takeover (.takeover), which is
+   deliberately louder and joyful: confirming "Join existing" would
+   replace this device's own history (docs/adr/0006), and checking in
+   after a Fact has sat unanswered past MAX_RESPONSE_MS (engine.ts) in
+   case the Learner walked away. Two layers (the fixed, dimmed
+   .modal-confirm backdrop and the centered .modal-confirm-card itself)
+   rather than one, since a single element can't both cover the full
+   screen AND be a small centered card. */
+.modal-confirm {
   position: fixed;
   inset: 0;
   display: flex;
@@ -515,11 +517,11 @@ body {
   z-index: 10;
 }
 
-.sync-confirm[hidden] {
+.modal-confirm[hidden] {
   display: none;
 }
 
-.sync-confirm-card {
+.modal-confirm-card {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -531,26 +533,26 @@ body {
   max-width: 320px;
 }
 
-.sync-confirm-card p {
+.modal-confirm-card p {
   margin: 0;
   text-align: center;
   font-size: 0.95rem;
 }
 
-.sync-confirm-card button {
+.modal-confirm-card button {
   padding: 0.6rem 1.25rem;
   border-radius: 8px;
   font-size: 0.9rem;
   font-weight: 600;
 }
 
-#sync-confirm-yes {
+.modal-confirm-primary {
   border: none;
   background: var(--accent);
   color: white;
 }
 
-#sync-confirm-no {
+.modal-confirm-secondary {
   border: 1px solid color-mix(in srgb, CanvasText 30%, transparent);
   background: none;
   color: CanvasText;
@@ -813,7 +815,9 @@ body {
    Learner to start typing an answer that goes nowhere. `visibility`
    rather than `display` so nothing reflows underneath. */
 body[data-takeover="true"] .center,
-body[data-takeover="true"] .keypad {
+body[data-takeover="true"] .keypad,
+body[data-idle-confirm="true"] .center,
+body[data-idle-confirm="true"] .keypad {
   visibility: hidden;
 }
 

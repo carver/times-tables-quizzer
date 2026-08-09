@@ -59,6 +59,15 @@ export type LandingDecision = {
 // to the quiz. Reuses the engine's own dayKey rather than a second
 // notion of "day" - same-day detection here means exactly what it means
 // for the Streak.
+//
+// `requested` is undefined for a genuinely fresh open (no route hash at
+// all - a cold launch from the home-screen icon, or a bare URL with
+// nothing after it) and a specific Route whenever the hash already named
+// one explicitly. That distinction matters on a day the map has already
+// been shown: a browser refresh preserves the hash exactly as it was, so
+// a Learner sitting on the map (or stats) and reloading must land back
+// on that same screen, not get yanked into the quiz - only the "no hash
+// at all" case falls through to the once-a-day default.
 export function decideLanding(lastMapShownDay: DayKey | null, now: number, requested?: Route): LandingDecision {
   // The reset screen is the one route the landing rule must not
   // override. It is reached only by typing its hash (see RESET_ROUTE),
@@ -69,8 +78,11 @@ export function decideLanding(lastMapShownDay: DayKey | null, now: number, reque
   }
 
   const today = dayKey(now);
-  if (today === lastMapShownDay) {
-    return { route: "quiz" };
+  if (today !== lastMapShownDay) {
+    // A new calendar day always starts at the map, regardless of what
+    // was requested - this is the once-a-day "welcome back" moment ticket
+    // #11 exists for, not something an old hash should be able to skip.
+    return { route: "map", shownOnDay: today };
   }
-  return { route: "map", shownOnDay: today };
+  return { route: requested ?? "quiz" };
 }

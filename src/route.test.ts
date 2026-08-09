@@ -65,7 +65,9 @@ describe("decideLanding", () => {
     expect(decision.shownOnDay).toBe("2026-01-02");
   });
 
-  it("goes straight to the quiz on a later open the same calendar day", () => {
+  it("goes straight to the quiz on a later open the same calendar day with nothing requested", () => {
+    // "Nothing requested" is what a genuinely fresh open looks like (no
+    // hash at all) - the once-a-day default only applies then.
     const decision = decideLanding("2026-01-01", day(0) + 5000);
 
     expect(decision).toEqual({ route: "quiz" });
@@ -75,6 +77,25 @@ describe("decideLanding", () => {
     const decision = decideLanding("2026-01-01", day(0) + 5000);
 
     expect(decision.shownOnDay).toBeUndefined();
+  });
+
+  it("honors an explicitly requested route on a later open the same calendar day", () => {
+    // A browser refresh preserves the current hash exactly - reloading
+    // while already on the map (or stats) must not fling the Learner into
+    // the quiz just because the map happens to have been shown earlier
+    // today.
+    expect(decideLanding("2026-01-01", day(0) + 5000, "map").route).toBe("map");
+    expect(decideLanding("2026-01-01", day(0) + 5000, "stats").route).toBe("stats");
+    expect(decideLanding("2026-01-01", day(0) + 5000, "quiz").route).toBe("quiz");
+  });
+
+  it("still forces the map on a new calendar day even if another route was explicitly requested", () => {
+    // The once-a-day "welcome back" moment takes priority over an old
+    // hash from before the day rolled over.
+    const decision = decideLanding("2026-01-01", day(1), "stats");
+
+    expect(decision.route).toBe("map");
+    expect(decision.shownOnDay).toBe("2026-01-02");
   });
 });
 
@@ -93,8 +114,8 @@ describe("the reset route", () => {
     expect(decideLanding(dayKey(day(0)), day(0), "reset").route).toBe("reset");
   });
 
-  it("still applies the landing rule to every other requested route", () => {
+  it("still forces every other requested route to the map on a genuinely new day", () => {
     expect(decideLanding(null, day(0), "stats").route).toBe("map");
-    expect(decideLanding(dayKey(day(0)), day(0), "stats").route).toBe("quiz");
+    expect(decideLanding(dayKey(day(-1)), day(0), "stats").route).toBe("map");
   });
 });

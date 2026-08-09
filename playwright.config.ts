@@ -16,6 +16,18 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: "on-first-failure",
+    // Headless Chromium defaults to UTC regardless of the host's own
+    // timezone. That's invisible most of the day, but engine.ts's dayKey
+    // (and e2e/helpers.ts's matching TODAY()/YESTERDAY()) both take the
+    // *local* calendar day - so once the host's local evening crosses
+    // midnight UTC, a spec that seeds "today" from the test process and
+    // a page that computes "today" from the browser silently disagree by
+    // a day, and anything gated on same-day-vs-new-day (the landing
+    // rule, the Streak) breaks in a way that looks like flakiness but
+    // reproduces every time after that hour. Pinning the browser to
+    // whichever timezone is actually running the tests keeps both sides
+    // computing the same calendar day, on any machine, at any hour.
+    timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   // Tests run against a real build, not the dev server - it's the same

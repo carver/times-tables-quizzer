@@ -8,7 +8,7 @@ import {
   inlineCelebrations,
   type TakeoverQueue,
 } from "./celebrationQueue";
-import { createInitialState, MAX_ACTIVE_RANGE_SIZE, type Celebration, type CelebrationKind, type Dependencies, type EngineState, type Fact } from "./engine/engine";
+import { createInitialState, MAX_ACTIVE_RANGE_SIZE, MAX_RESPONSE_MS, type Celebration, type CelebrationKind, type Dependencies, type EngineState, type Fact } from "./engine/engine";
 import { clearState, loadState, parseEngineState, saveState, type AppState } from "./persistence";
 import {
   activeProfile,
@@ -141,11 +141,23 @@ getEl<HTMLDivElement>("app").innerHTML = `
        Learner, not two histories to merge - docs/adr/0006), so this is
        the one irreversible-feeling moment in the whole sync feature that
        gets an explicit confirmation rather than happening silently. -->
-  <div class="sync-confirm" id="sync-confirm" hidden role="dialog" aria-modal="true">
-    <div class="sync-confirm-card">
+  <div class="modal-confirm" id="sync-confirm" hidden role="dialog" aria-modal="true">
+    <div class="modal-confirm-card">
       <p id="sync-confirm-body"></p>
-      <button type="button" id="sync-confirm-yes">Replace with shared history</button>
-      <button type="button" id="sync-confirm-no">Cancel</button>
+      <button type="button" class="modal-confirm-primary" id="sync-confirm-yes">Replace with shared history</button>
+      <button type="button" class="modal-confirm-secondary" id="sync-confirm-no">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Shown when a Fact has sat unanswered past MAX_RESPONSE_MS
+       (engine.ts) - long enough that the Learner may have walked away
+       mid-question rather than just being slow. Confirming restarts the
+       clock (screen.ts's restartFactTimer) so idle time at home doesn't
+       get billed to the answer once it finally comes. -->
+  <div class="modal-confirm" id="idle-confirm" hidden role="dialog" aria-modal="true">
+    <div class="modal-confirm-card">
+      <p>Still there?</p>
+      <button type="button" class="modal-confirm-primary" id="idle-confirm-yes">Yes, I'm back</button>
     </div>
   </div>
 
@@ -284,6 +296,9 @@ const syncConfirmBodyEl = getEl<HTMLParagraphElement>("sync-confirm-body");
 const syncConfirmYesEl = getEl<HTMLButtonElement>("sync-confirm-yes");
 const syncConfirmNoEl = getEl<HTMLButtonElement>("sync-confirm-no");
 
+const idleConfirmEl = getEl<HTMLDivElement>("idle-confirm");
+const idleConfirmYesEl = getEl<HTMLButtonElement>("idle-confirm-yes");
+
 const quizScreenEl = getEl<HTMLElement>("screen-quiz");
 const streakEl = getEl<HTMLParagraphElement>("streak");
 const promptEl = getEl<HTMLParagraphElement>("prompt");
@@ -316,6 +331,11 @@ let muted = loaded.muted;
 let remindersEnabled = loaded.remindersEnabled;
 setMuted(muted);
 let overlayTimeout: ReturnType<typeof setTimeout> | undefined;
+
+let idleCheckTimeout: ReturnType<typeof setTimeout> | undefined;
+// The factShownAt this timeout was armed for, so re-renders that don't
+// change it (e.g. typing a digit) don't restart the 30s countdown.
+let idleCheckArmedFor: number | undefined;
 
 // The queue of takeover-tagged Celebrations waiting to be shown
 // (celebrationQueue.ts) plus which one, if any, is currently rendered
@@ -787,18 +807,53 @@ function renderQuiz() {
     // gets swallowed. Nothing to render is nothing to leak.
     promptEl.textContent = "";
     typedAnswerEl.textContent = " ";
+    disarmIdleCheck();
     return;
   }
 
   if (quizState.mode === "correcting") {
     // The correct answer is shown outright - the Learner isn't being
-    // quizzed again, they're retyping to practice it.
+    // quizzed again, they're retyping to practice it. Nothing here feeds
+    // Fluency (CONTEXT.md), so there's no idle-check to arm.
     promptEl.textContent = `${quizState.wrongFact.a} × ${quizState.wrongFact.b} = ${quizState.correctAnswer}`;
+    disarmIdleCheck();
   } else {
     promptEl.textContent = `${quizState.engine.fact.a} × ${quizState.engine.fact.b} = ?`;
+    updateIdleCheck();
   }
 
   typedAnswerEl.textContent = quizState.typed || " ";
+}
+
+// Checks in after a Fact has sat unanswered past MAX_RESPONSE_MS
+// (engine.ts) - long enough that the Learner may have walked away rather
+// than just being slow. Re-arms relative to `factShownAt` itself (not
+// "now") so repeated re-renders that don't change it - a keypress, a
+// stats-tooltip dismissal - never restart the countdown; only an actual
+// new Fact or a genuine restartFactTimer (below) does.
+function updateIdleCheck() {
+  if (quizState.mode !== "answering") return;
+  const { factShownAt } = quizState;
+  if (idleCheckArmedFor === factShownAt) return;
+  disarmIdleCheck();
+  idleCheckArmedFor = factShownAt;
+  const delay = Math.max(0, MAX_RESPONSE_MS - (deps.now() - factShownAt));
+  idleCheckTimeout = setTimeout(showIdleConfirm, delay);
+}
+
+function disarmIdleCheck() {
+  clearTimeout(idleCheckTimeout);
+  idleCheckTimeout = undefined;
+  idleCheckArmedFor = undefined;
+}
+
+function showIdleConfirm() {
+  idleConfirmEl.hidden = false;
+  // Same belt-and-braces reasoning as document.body.dataset.takeover:
+  // the Fact has already sat unanswered long enough to trigger this, so
+  // there's nothing lost in also hiding it while the Learner confirms
+  // they're back.
+  document.body.dataset.idleConfirm = "true";
 }
 
 // True while an opaque Celebration overlay is covering the next Fact.
@@ -930,6 +985,20 @@ function dismissTakeover() {
   renderQuiz();
 }
 
+// The Learner confirming "still there" after MAX_RESPONSE_MS (engine.ts)
+// restarts the clock exactly like returning to the quiz from elsewhere
+// (applyRoute) or a takeover clearing (hideOverlay) - all three are the
+// same underlying case: time passed that the Fact's clock shouldn't be
+// charged for.
+function confirmStillThere() {
+  idleConfirmEl.hidden = true;
+  document.body.dataset.idleConfirm = "false";
+  quizState = restartFactTimer(quizState, deps);
+  renderQuiz();
+}
+
+idleConfirmYesEl.addEventListener("click", confirmStillThere);
+
 function handleEnter() {
   const { screen: next, outcome } = pressEnter(quizState, deps);
   quizState = next;
@@ -1008,6 +1077,14 @@ document.addEventListener("keydown", (keyEvent) => {
     if (keyEvent.key === "Enter" || keyEvent.key === " ") {
       keyEvent.preventDefault();
       dismissTakeover();
+    }
+    return;
+  }
+
+  if (!idleConfirmEl.hidden) {
+    if (keyEvent.key === "Enter" || keyEvent.key === " ") {
+      keyEvent.preventDefault();
+      confirmStillThere();
     }
     return;
   }
@@ -1292,6 +1369,16 @@ function applyRoute(route: Route) {
   // back has their response time measured from the original visit.
   if (arrivingAtQuiz) quizState = restartFactTimer(quizState, deps);
 
+  if (route !== "quiz") {
+    // Nothing renders the quiz screen from here on, so nothing will call
+    // updateIdleCheck again - a still-pending timeout would otherwise pop
+    // the "still there?" dialog while the Learner is looking at another
+    // screen entirely (e.g. the Android back button navigating away).
+    disarmIdleCheck();
+    idleConfirmEl.hidden = true;
+    document.body.dataset.idleConfirm = "false";
+  }
+
   if (route === "map") renderMap();
   if (route === "quiz") renderQuiz();
   if (route === "stats") renderStats();
@@ -1309,8 +1396,12 @@ const joinProfileId = joinProfileIdFromHash(window.location.hash);
 // CONTEXT.md's Progress map landing rule: shown on the first open of
 // each calendar day, straight to the quiz on later opens the same day.
 // Reuses the engine's dayKey (via decideLanding) rather than a second
-// notion of "day".
-const landing = decideLanding(lastMapShownDay, deps.now(), routeFromHash(window.location.hash));
+// notion of "day". An empty hash - a genuinely fresh open - is passed
+// through as "nothing requested" rather than routeFromHash's own "map"
+// fallback, so decideLanding can tell that apart from a reload that
+// already had an explicit route in the URL (see its own comment).
+const requestedRoute = window.location.hash === "" ? undefined : routeFromHash(window.location.hash);
+const landing = decideLanding(lastMapShownDay, deps.now(), requestedRoute);
 if (landing.shownOnDay !== undefined) {
   lastMapShownDay = landing.shownOnDay;
   persist();

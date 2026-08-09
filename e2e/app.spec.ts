@@ -64,6 +64,35 @@ test.describe("landing and navigation", () => {
     await expect(page).toHaveURL(/#\/map$/);
     await expect(page.locator("#screen-map")).toHaveAttribute("data-active", "true");
   });
+
+  test("reloading while on the map stays on the map, even on a day the map was already shown", async ({ page }) => {
+    // Regression: the once-a-day landing rule used to override every
+    // reload regardless of the current hash, so a Learner sitting on the
+    // map (having already been shown it once today) and refreshing the
+    // page would get flung straight into the quiz - a browser refresh
+    // preserves the hash exactly, so this is not a "fresh open" the
+    // once-a-day rule should apply to.
+    await seed(page, { lastMapShownDay: TODAY() });
+    await page.goto("/#/map");
+
+    await expect(page).toHaveURL(/#\/map$/);
+    await expect(page.locator("#screen-map")).toHaveAttribute("data-active", "true");
+
+    await page.reload();
+
+    await expect(page).toHaveURL(/#\/map$/);
+    await expect(page.locator("#screen-map")).toHaveAttribute("data-active", "true");
+  });
+
+  test("reloading while on the stats page stays there too", async ({ page }) => {
+    await seed(page, { lastMapShownDay: TODAY() });
+    await page.goto("/#/stats");
+
+    await page.reload();
+
+    await expect(page).toHaveURL(/#\/stats$/);
+    await expect(page.locator("#screen-stats")).toHaveAttribute("data-active", "true");
+  });
 });
 
 test.describe("answering", () => {
@@ -312,9 +341,9 @@ test.describe("sound preference", () => {
     await expect(page.locator("#mute-toggle")).toHaveAttribute("aria-pressed", "true");
     expect((await readSave(page)).muted).toBe(true);
 
+    // A reload preserves the hash exactly, so it lands back on the map
+    // (where the toggle was clicked) rather than being sent to the quiz.
     await page.reload();
-    // A same-day reload lands on the quiz, so reach the map to see the toggle.
-    await page.click("#map-link");
     await expect(page.locator("#mute-toggle")).toHaveAttribute("aria-pressed", "true");
   });
 });
@@ -408,6 +437,47 @@ test.describe("the inline Celebration overlay", () => {
     await expect(page.locator("#overlay")).toHaveAttribute("data-visible", "false");
     await expect(page.locator("#typed-answer")).toHaveText("7");
     await expect(page.locator("#prompt")).toContainText("?");
+  });
+});
+
+test.describe("the idle check", () => {
+  test("checks in after MAX_RESPONSE_MS idle mid-question, and confirming restarts the clock", async ({ page }) => {
+    // Virtual time: fast-forwarding 31 real seconds would make this the
+    // slowest spec in the suite for no reason, and Page.clock advances
+    // Date.now() along with the timers, so the app can't tell the
+    // difference from a real wait.
+    await page.clock.install();
+    await seed(page, { lastMapShownDay: TODAY() });
+    await page.goto("/");
+    await expect(page.locator("#screen-quiz")).toHaveAttribute("data-active", "true");
+
+    await page.clock.fastForward("00:31");
+    await expect(page.locator("#idle-confirm")).toBeVisible();
+    // Swallowed like a takeover: the keypad must not be answerable while
+    // this is up, or an answer typed through it would still be measured
+    // against the stale factShownAt from before the confirm even showed.
+    await expect(page.locator("#keypad")).not.toBeVisible();
+
+    await page.click("#idle-confirm-yes");
+    await expect(page.locator("#idle-confirm")).toBeHidden();
+
+    const key = ((await page.locator("#prompt").textContent()) ?? "").match(/\d+/g)!.slice(0, 2).join("x");
+    await answerWithKeypad(page, await promptedAnswer(page));
+
+    const recorded = (await readSave(page)).fluency[key].averageResponseMs;
+    expect(recorded).toBeLessThan(3_000);
+  });
+
+  test("never appears while retyping a correction, which does not feed Fluency", async ({ page }) => {
+    await page.clock.install();
+    await seed(page, { lastMapShownDay: TODAY() });
+    await page.goto("/");
+
+    await answerWithKeypad(page, 999999); // never a real product in any Active range
+    await expect(page.locator("#overlay")).toHaveAttribute("data-visible", "true");
+
+    await page.clock.fastForward("00:31");
+    await expect(page.locator("#idle-confirm")).toBeHidden();
   });
 });
 
