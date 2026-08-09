@@ -17,6 +17,7 @@ import {
   pairedProfiles,
   removePairedProfile,
   setActiveProfile,
+  updatePairedProfileLabel,
 } from "./profilePairing";
 import { computeProgressMapStatus, type ProgressHighWaterMark, type ProgressReadout } from "./progressMap";
 import { disableDailyReminder, enableDailyReminder, isReminderSupported } from "./reminders";
@@ -117,6 +118,10 @@ getEl<HTMLDivElement>("app").innerHTML = `
       <div class="sync-panel" id="sync-panel" hidden>
         <div id="sync-unpaired-actions">
           <button type="button" class="sync-action" id="start-sharing-button">Start sharing from this device</button>
+          <div id="start-sharing-form" hidden>
+            <input type="text" class="sync-input" id="start-sharing-name-input" placeholder='Name this profile (e.g. "Sam")' />
+            <button type="button" class="sync-action" id="start-sharing-confirm-button">Share</button>
+          </div>
           <p class="settings-hint">or, if another device already started sharing:</p>
           <input type="text" class="sync-input" id="join-code-input" placeholder="Paste the sync link here" />
           <button type="button" class="sync-action" id="join-button">Join</button>
@@ -300,6 +305,9 @@ const syncPanelEl = getEl<HTMLDivElement>("sync-panel");
 const syncUnpairedActionsEl = getEl<HTMLDivElement>("sync-unpaired-actions");
 const syncPairedActionsEl = getEl<HTMLDivElement>("sync-paired-actions");
 const startSharingButtonEl = getEl<HTMLButtonElement>("start-sharing-button");
+const startSharingFormEl = getEl<HTMLDivElement>("start-sharing-form");
+const startSharingNameInputEl = getEl<HTMLInputElement>("start-sharing-name-input");
+const startSharingConfirmButtonEl = getEl<HTMLButtonElement>("start-sharing-confirm-button");
 const joinCodeInputEl = getEl<HTMLInputElement>("join-code-input");
 const joinButtonEl = getEl<HTMLButtonElement>("join-button");
 const syncStatusEl = getEl<HTMLParagraphElement>("sync-status");
@@ -453,7 +461,11 @@ function handleRemoteSnapshot(data: Record<string, unknown> | undefined, meta: {
 function pushEngineStateToCloud() {
   const profile = activeProfile();
   if (!profile) return;
-  void loadCloudSync().then((mod) => mod.writeProfile(profile.profileId, quizState.engine));
+  // writeProfile is a whole-document replace (ADR 0006), so the label has
+  // to ride along on every single write, not just the first - otherwise
+  // the very next Attempt after naming a Profile would silently wipe the
+  // name back out.
+  void loadCloudSync().then((mod) => mod.writeProfile(profile.profileId, { ...quizState.engine, label: profile.label }));
 }
 
 // Starts (or restarts, if switching Profiles) the live subscription for
@@ -518,6 +530,8 @@ function renderSyncPanel() {
   showQrButtonEl.textContent = "Show QR code";
   newProfileFormEl.hidden = true;
   newProfileNameInputEl.value = "";
+  startSharingFormEl.hidden = true;
+  startSharingNameInputEl.value = "";
 
   if (profile) {
     syncButtonEl.textContent = `🔗 Synced: ${profile.label}`;
@@ -563,6 +577,13 @@ function renderProfileSwitcher() {
   }
 }
 
+// A document from before Profiles carried a name (or a corrupted write)
+// falls back to the pre-existing generic name rather than showing
+// something blank in the switcher/sync status.
+function labelFromDocument(data: Record<string, unknown>): string {
+  return typeof data.label === "string" && data.label.trim() ? data.label : "Shared progress";
+}
+
 // Switching, unlike joining, never needs the replace-confirmation - a
 // device already paired with both Profiles has already agreed (at join
 // time) to let sync own its state, so there's no "first time" local
@@ -571,6 +592,7 @@ async function switchToProfile(profileId: string): Promise<void> {
   setActiveProfile(profileId);
   const mod = await loadCloudSync();
   const data = await mod.fetchProfile(profileId);
+  if (data) updatePairedProfileLabel(profileId, labelFromDocument(data));
   const engine = data ? parseEngineState(data) : null;
   quizState = createInitialScreen(engine ?? createInitialState(INITIAL_ACTIVE_RANGE, deps), deps);
   persist();
@@ -595,7 +617,7 @@ async function startNewProfile(rawLabel: string): Promise<void> {
   const profileId = generateProfileId();
   const mod = await loadCloudSync();
   const freshState = createInitialState(INITIAL_ACTIVE_RANGE, deps);
-  const success = await mod.writeProfile(profileId, freshState);
+  const success = await mod.writeProfile(profileId, { ...freshState, label });
   if (!success) {
     showSyncHint("Couldn't reach the sync service - check your connection and try again.");
     return;
@@ -610,8 +632,35 @@ async function startNewProfile(rawLabel: string): Promise<void> {
   showSyncHint(`Started a new profile: "${label}". Switch back anytime from the switcher below.`);
 }
 
-function completeJoin(profileId: string, remoteEngine: EngineState) {
-  addPairedProfile({ profileId, label: "Shared progress" });
+// Turns this device's own current progress into a shareable Profile for
+// the first time - unlike "Start a new profile", the EngineState that
+// goes up is whatever's already here, not a fresh one.
+async function startSharing(rawLabel: string): Promise<void> {
+  const label = rawLabel.trim();
+  if (!label) {
+    showSyncHint("Give this profile a name first.");
+    return;
+  }
+
+  const profileId = generateProfileId();
+  const mod = await loadCloudSync();
+  // Awaited deliberately, unlike pushEngineStateToCloud's ongoing
+  // fire-and-forget pushes: the whole point of this one-time upload is
+  // that the link is immediately shareable, so this waits for the
+  // backend to actually confirm it rather than assuming success.
+  const success = await mod.writeProfile(profileId, { ...quizState.engine, label });
+  if (!success) {
+    showSyncHint("Couldn't reach the sync service - check your connection and try again.");
+    return;
+  }
+  addPairedProfile({ profileId, label });
+  startSyncing(profileId);
+  renderSyncPanel();
+  showSyncHint('Ready — tap "Copy sync link to share" and send it to the other phone.');
+}
+
+function completeJoin(profileId: string, remoteEngine: EngineState, label: string) {
+  addPairedProfile({ profileId, label });
   quizState = createInitialScreen(remoteEngine, deps);
   persist();
   startSyncing(profileId);
@@ -625,6 +674,7 @@ function completeJoin(profileId: string, remoteEngine: EngineState) {
 // clean up beyond hiding the dialog.
 let pendingJoinProfileId: string | null = null;
 let pendingJoinRemoteEngine: EngineState | undefined;
+let pendingJoinLabel: string | undefined;
 
 function showJoinConfirm(local: EngineState, remote: EngineState) {
   syncConfirmBodyEl.textContent =
@@ -634,11 +684,9 @@ function showJoinConfirm(local: EngineState, remote: EngineState) {
   syncConfirmEl.hidden = false;
 }
 
-// The one shared entry point for both "Start sharing" (an ID nothing
-// yet exists for) and "Join existing" (an ID another device already
-// wrote to) - fetches whatever's actually there first rather than
-// assuming, since a mistyped/stale link should fail honestly rather than
-// silently pairing to nothing.
+// The entry point for "Join existing" - fetches whatever's actually
+// there first rather than assuming, since a mistyped/stale link should
+// fail honestly rather than silently pairing to nothing.
 async function beginJoin(profileId: string): Promise<void> {
   const mod = await loadCloudSync();
   const data = await mod.fetchProfile(profileId);
@@ -652,15 +700,17 @@ async function beginJoin(profileId: string): Promise<void> {
     showSyncHint("That shared progress looks corrupted - try copying the sync link again from the other device.");
     return;
   }
+  const label = labelFromDocument(data);
 
   if (hasNonTrivialLocalProgress(quizState.engine)) {
     pendingJoinProfileId = profileId;
     pendingJoinRemoteEngine = remoteEngine;
+    pendingJoinLabel = label;
     showJoinConfirm(quizState.engine, remoteEngine);
     return;
   }
 
-  completeJoin(profileId, remoteEngine);
+  completeJoin(profileId, remoteEngine, label);
 }
 
 // Builds one 12x12 grid of cells - shared by the Progress map's own grid
@@ -680,9 +730,9 @@ function buildProgressGrid(container: HTMLDivElement, activeRangeSize: number, n
       const cell = document.createElement("div");
       cell.className = "grid-cell";
       // The Active range's conquered n x n corner, drawn literally (ADR
-      // 0004's grid shape, reused rather than a second metaphor). Sizes
-      // 1x1-4x4 render as already-conquered simply because the Active
-      // range never starts smaller than 5x5.
+      // 0004's grid shape, reused rather than a second metaphor). Size
+      // 1x1 renders as already-conquered simply because the Active range
+      // never starts smaller than 2x2.
       if (a <= activeRangeSize && b <= activeRangeSize) {
         cell.classList.add("grid-cell--filled");
       }
@@ -1236,23 +1286,12 @@ syncButtonEl.addEventListener("click", () => {
 });
 
 startSharingButtonEl.addEventListener("click", () => {
-  void (async () => {
-    const profileId = generateProfileId();
-    const mod = await loadCloudSync();
-    // Awaited deliberately, unlike pushEngineStateToCloud's ongoing
-    // fire-and-forget pushes: the whole point of this one-time upload is
-    // that the link is immediately shareable, so this waits for the
-    // backend to actually confirm it rather than assuming success.
-    const success = await mod.writeProfile(profileId, quizState.engine);
-    if (!success) {
-      showSyncHint("Couldn't reach the sync service - check your connection and try again.");
-      return;
-    }
-    addPairedProfile({ profileId, label: "Shared progress" });
-    startSyncing(profileId);
-    renderSyncPanel();
-    showSyncHint('Ready — tap "Copy sync link to share" and send it to the other phone.');
-  })();
+  startSharingFormEl.hidden = !startSharingFormEl.hidden;
+  if (!startSharingFormEl.hidden) startSharingNameInputEl.focus();
+});
+
+startSharingConfirmButtonEl.addEventListener("click", () => {
+  void startSharing(startSharingNameInputEl.value);
 });
 
 newProfileButtonEl.addEventListener("click", () => {
@@ -1328,18 +1367,20 @@ stopSyncingButtonEl.addEventListener("click", () => {
 });
 
 syncConfirmYesEl.addEventListener("click", () => {
-  if (pendingJoinProfileId && pendingJoinRemoteEngine) {
-    completeJoin(pendingJoinProfileId, pendingJoinRemoteEngine);
+  if (pendingJoinProfileId && pendingJoinRemoteEngine && pendingJoinLabel) {
+    completeJoin(pendingJoinProfileId, pendingJoinRemoteEngine, pendingJoinLabel);
   }
   syncConfirmEl.hidden = true;
   pendingJoinProfileId = null;
   pendingJoinRemoteEngine = undefined;
+  pendingJoinLabel = undefined;
 });
 
 syncConfirmNoEl.addEventListener("click", () => {
   syncConfirmEl.hidden = true;
   pendingJoinProfileId = null;
   pendingJoinRemoteEngine = undefined;
+  pendingJoinLabel = undefined;
 });
 
 // Chrome/Android fires this instead of showing its own install banner

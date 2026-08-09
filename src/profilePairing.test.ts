@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { activeProfile, addPairedProfile, pairedProfiles, removePairedProfile, setActiveProfile } from "./profilePairing";
+import {
+  activeProfile,
+  addPairedProfile,
+  pairedProfiles,
+  removePairedProfile,
+  setActiveProfile,
+  updatePairedProfileLabel,
+} from "./profilePairing";
 
 const STORAGE_KEY = "times-tables-quizzer:profiles";
 
@@ -85,6 +92,23 @@ describe("profile pairing", () => {
 
     expect(pairedProfiles()).toEqual([]);
     expect(activeProfile()).toBeNull();
+  });
+
+  it("corrects a paired Profile's label to match the synced document", () => {
+    addPairedProfile({ profileId: "abc", label: "Shared progress" });
+
+    updatePairedProfileLabel("abc", "Alex");
+
+    expect(pairedProfiles()).toEqual([{ profileId: "abc", label: "Alex" }]);
+    expect(activeProfile()).toEqual({ profileId: "abc", label: "Alex" });
+  });
+
+  it("ignores a label update for a Profile this device never paired with", () => {
+    addPairedProfile({ profileId: "abc", label: "Alex" });
+
+    updatePairedProfileLabel("never-paired", "Sam");
+
+    expect(pairedProfiles()).toEqual([{ profileId: "abc", label: "Alex" }]);
   });
 
   it("discards corrupted storage rather than throwing", () => {

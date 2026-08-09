@@ -19,6 +19,14 @@ async function readEngineState(page: Page) {
   return JSON.parse(raw!);
 }
 
+// "Start sharing" reveals an inline name prompt rather than sharing
+// immediately - see main.ts's startSharingButtonEl/startSharingConfirmButtonEl.
+async function startSharing(page: Page, label: string): Promise<void> {
+  await page.click("#start-sharing-button");
+  await page.fill("#start-sharing-name-input", label);
+  await page.click("#start-sharing-confirm-button");
+}
+
 // jsQR (a real, independent decoder - a devDependency purely for this
 // check) confirms the on-screen QR actually scans as the expected link,
 // rather than just asserting some <svg> appeared. Injected into the page
@@ -85,8 +93,8 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await pageA.click("#map-link");
 
     await pageA.click("#sync-button");
-    await pageA.click("#start-sharing-button");
-    await expect(pageA.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
+    await startSharing(pageA, "Sam");
+    await expect(pageA.locator("#sync-button")).toContainText("Synced: Sam", { timeout: SYNC_TIMEOUT_MS });
 
     const profileId = await activeProfileId(pageA);
     const stateA = await readEngineState(pageA);
@@ -94,7 +102,9 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     const ctxB = await browser.newContext();
     const pageB = await ctxB.newPage();
     await pageB.goto(`/#/join/${profileId}`);
-    await expect(pageB.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
+    // The name travels with the Profile document itself, not just
+    // device A's own local label - a fresh device joining sees it too.
+    await expect(pageB.locator("#sync-button")).toContainText("Synced: Sam", { timeout: SYNC_TIMEOUT_MS });
 
     const stateB = await readEngineState(pageB);
     expect(stateB.fact).toEqual(stateA.fact);
@@ -115,7 +125,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await pageA.click("#map-link");
 
     await pageA.click("#sync-button");
-    await pageA.click("#start-sharing-button");
+    await startSharing(pageA, "Shared progress");
     await expect(pageA.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
 
     await expect(pageA.locator("#show-qr-button")).toHaveText("Show QR code");
@@ -156,7 +166,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     const pageA = await ctxA.newPage();
     await pageA.goto("/");
     await pageA.click("#sync-button");
-    await pageA.click("#start-sharing-button");
+    await startSharing(pageA, "Shared progress");
     await expect(pageA.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
     const profileId = await activeProfileId(pageA);
 
@@ -195,7 +205,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     const pageA = await ctxA.newPage();
     await pageA.goto("/");
     await pageA.click("#sync-button");
-    await pageA.click("#start-sharing-button");
+    await startSharing(pageA, "Shared progress");
     await expect(pageA.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
     const profileId = await activeProfileId(pageA);
 
@@ -222,7 +232,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await page.click("#map-link");
 
     await page.click("#sync-button");
-    await page.click("#start-sharing-button");
+    await startSharing(page, "Shared progress");
     await expect(page.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
     const originalProfileId = await activeProfileId(page);
     const originalState = await readEngineState(page);
@@ -256,7 +266,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
   test("Stop syncing detaches this device but leaves its local progress untouched", async ({ page }) => {
     await page.goto("/");
     await page.click("#sync-button");
-    await page.click("#start-sharing-button");
+    await startSharing(page, "Shared progress");
     await expect(page.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
 
     await page.click("#stop-syncing-button");
@@ -271,7 +281,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
   }) => {
     await page.goto("/");
     await page.click("#sync-button");
-    await page.click("#start-sharing-button");
+    await startSharing(page, "Shared progress");
     await expect(page.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
 
     await page.goto("/#/reset");
@@ -292,5 +302,26 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await expect(page.locator("#sync-hint")).toBeVisible();
     await expect(page.locator("#sync-hint")).toContainText("valid sync link");
     await expect(page.locator("#sync-button")).toHaveText("🔗 Sync across devices");
+  });
+
+  test("Start sharing and Start a new profile both refuse to proceed without a name", async ({ page }) => {
+    await page.goto("/");
+    await page.click("#sync-button");
+
+    await page.click("#start-sharing-button");
+    await page.click("#start-sharing-confirm-button");
+    await expect(page.locator("#sync-hint")).toContainText("name");
+    await expect(page.locator("#sync-button")).toHaveText("🔗 Sync across devices");
+
+    // The form is already open from the click above - fill it directly
+    // rather than the startSharing() helper, which would toggle it shut.
+    await page.fill("#start-sharing-name-input", "Shared progress");
+    await page.click("#start-sharing-confirm-button");
+    await expect(page.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
+
+    await page.click("#new-profile-button");
+    await page.click("#new-profile-confirm-button");
+    await expect(page.locator("#sync-hint")).toContainText("name");
+    await expect(page.locator("#sync-button")).toContainText("Shared progress");
   });
 });

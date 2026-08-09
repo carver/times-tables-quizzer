@@ -80,6 +80,19 @@ export function addPairedProfile(profile: PairedProfile): void {
   save({ profiles: [...state.profiles, profile], activeProfileId: profile.profileId });
 }
 
+// Corrects this device's local record of a Profile's name against
+// whatever the synced document actually says - e.g. right after
+// fetching/joining it, so a device that only ever knew a generic
+// placeholder starts showing the real name. A no-op if `profileId`
+// isn't paired here, or the label already matches.
+export function updatePairedProfileLabel(profileId: string, label: string): void {
+  const state = load();
+  const existing = state.profiles.find((profile) => profile.profileId === profileId);
+  if (!existing || existing.label === label) return;
+  const profiles = state.profiles.map((profile) => (profile.profileId === profileId ? { ...profile, label } : profile));
+  save({ ...state, profiles });
+}
+
 // Switches which already-paired Profile is active, with no network
 // action and no re-pairing - the whole point of remembering the list.
 // A no-op if `profileId` isn't one this device has actually paired with.
