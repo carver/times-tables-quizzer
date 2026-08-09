@@ -231,10 +231,15 @@ body {
      a possible scroll/zoom gesture before committing to a click - on a
      fast, light tap that disambiguation is exactly what drops the tap. */
   touch-action: manipulation;
+  /* Instant on press (overridden by :active below), eased back out on
+     release - so a press that's too quick to see while held still
+     leaves a brief, fading trace of having registered. */
+  transition: background-color 300ms ease-out;
 }
 
 .key:active {
-  background: color-mix(in srgb, CanvasText 12%, Canvas);
+  background: color-mix(in srgb, var(--accent) 45%, Canvas);
+  transition: background-color 0s;
 }
 
 /* Enter is visually heavier than the digit keys - it's the only way to
@@ -248,7 +253,8 @@ body {
 }
 
 .key-enter:active {
-  background: color-mix(in srgb, var(--accent) 80%, black);
+  background: color-mix(in srgb, var(--accent) 70%, black);
+  transition: background-color 0s;
 }
 
 .key-backspace {

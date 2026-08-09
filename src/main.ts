@@ -1059,6 +1059,13 @@ function handleEnter() {
   renderQuiz();
 }
 
+// iOS Safari only applies the CSS `:active` pseudo-class to a tap when
+// something on the page has a touchstart listener bound - otherwise every
+// `:active` rule (the keypad's pressed-state feedback) is silently inert
+// on a phone. This listener does nothing itself; it exists purely to
+// switch that behavior on.
+document.addEventListener("touchstart", () => {}, { passive: true });
+
 keypadEl.addEventListener("click", (clickEvent) => {
   const target = clickEvent.target;
   if (!(target instanceof HTMLElement)) return;
