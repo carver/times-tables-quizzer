@@ -32,7 +32,7 @@ firebase emulators:start --only firestore,auth   # keep running in one terminal
 npm run dev                                       # or npm run test:e2e / npm run test:rules
 ```
 
-To point the app at a real Firebase project instead - creating one, enabling Firestore + Anonymous Auth, and deploying `firestore.rules` to it - run [`./scripts/setup-firebase.sh`](scripts/setup-firebase.sh), an interactive walkthrough for the parts only a human with a Google account can do. It also publishes the resulting config as GitHub repo variables so the live GitHub Pages deploy gets real sync too, not just local dev.
+To point the app at a real Firebase project instead - creating one, enabling Firestore + Anonymous Auth, and deploying `firestore.rules` to it - run [`./scripts/setup_firebase.py`](scripts/setup_firebase.py) (Python 3, no extra packages needed), an interactive walkthrough for the parts only a human with a Google account can do. It also publishes the resulting config as GitHub repo variables so the live GitHub Pages deploy gets real sync too, not just local dev.
 
 ## Erasing all progress
 
