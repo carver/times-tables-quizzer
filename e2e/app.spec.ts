@@ -391,7 +391,7 @@ test.describe("the hidden reset screen", () => {
     expect(after.accuracy).toEqual({});
     expect(after.streak.count).toBe(0);
     expect(after.practiceDayCount).toBe(0);
-    expect(after.activeRange.size).toBe(5);
+    expect(after.activeRange.size).toBe(2);
   });
 
   test("leaves progress untouched if the Learner backs out", async ({ page }) => {
