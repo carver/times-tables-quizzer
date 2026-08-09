@@ -1164,10 +1164,7 @@ function handleEnter() {
 // switch that behavior on.
 document.addEventListener("touchstart", () => {}, { passive: true });
 
-keypadEl.addEventListener("click", (clickEvent) => {
-  const target = clickEvent.target;
-  if (!(target instanceof HTMLElement)) return;
-
+function handleKeypadTarget(target: HTMLElement) {
   const digit = target.dataset.digit;
   if (digit !== undefined) {
     handleDigit(digit);
@@ -1176,6 +1173,48 @@ keypadEl.addEventListener("click", (clickEvent) => {
   } else if (target.id === "key-enter") {
     handleEnter();
   }
+}
+
+// A tap that visibly registers (the `:active` flash fires) but never
+// produces a `click` is a real, reported failure mode - even with
+// touch-action: manipulation, a mobile browser can still decide, after
+// the fact, not to synthesize a click for a touch it accepted. pointerdown
+// fires unconditionally the instant the touch lands, so touch/pen input
+// acts on that directly instead of ever waiting on a click that might not
+// come. Mouse (and a keyboard/assistive-tech "activate", which dispatches
+// a genuine pointer sequence with its own pointerdown) are left on the
+// click listener below - untouched, and not part of the failure this is
+// fixing.
+//
+// `pointerEvent.preventDefault()` alone is not enough to stop the click
+// that follows: the Pointer Events spec only guarantees it suppresses
+// the compatibility *mouse* events, and Chromium (confirmed here by a
+// real-touch e2e test - a mouse-driven `.click()` never exercises this
+// path) still synthesizes `click` for a touch tap regardless. A short
+// time-window guard on the click handler is what actually prevents the
+// same tap from entering its digit twice.
+//
+// The guard's sentinel is -Infinity, not 0: performance.now() starts
+// near zero at page load, so a tap in the first moments of a fresh page
+// would otherwise compute `performance.now() - 0` as itself under
+// 500ms and get wrongly treated as a just-handled pointerdown's
+// trailing click, even though no pointerdown had actually run yet.
+let lastPointerHandledAt = -Infinity;
+
+keypadEl.addEventListener("pointerdown", (pointerEvent) => {
+  if (pointerEvent.pointerType === "mouse") return;
+  const target = pointerEvent.target;
+  if (!(target instanceof HTMLElement)) return;
+  pointerEvent.preventDefault();
+  lastPointerHandledAt = performance.now();
+  handleKeypadTarget(target);
+});
+
+keypadEl.addEventListener("click", (clickEvent) => {
+  if (performance.now() - lastPointerHandledAt < 500) return;
+  const target = clickEvent.target;
+  if (!(target instanceof HTMLElement)) return;
+  handleKeypadTarget(target);
 });
 
 takeoverEl.addEventListener("click", dismissTakeover);

@@ -113,6 +113,36 @@ test.describe("answering", () => {
     expect(errors).toEqual([]);
   });
 
+  // Regression for a real report: on a phone, the keypad's `:active`
+  // press feedback would fire but the digit sometimes never landed -
+  // about 1 in 20 taps. The cause was a lost `click`: mobile browsers
+  // can decide, after already accepting a touch, not to synthesize one
+  // after all. main.ts now acts on `pointerdown` for touch/pen input
+  // instead of waiting on `click`, which Playwright's default (mouse)
+  // `.click()` never exercises - a real touch context via `.tap()` is
+  // the only way to drive the code path this regression lives in, and
+  // to catch the double-entry a naive fix (acting on both pointerdown
+  // and the click that still follows) would cause.
+  test("typing on the keypad via a real touch tap registers each digit exactly once", async ({ browser }) => {
+    const ctx = await browser.newContext({ hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = trackPageErrors(page);
+    await seed(page, { lastMapShownDay: TODAY() });
+    await page.goto("/");
+
+    const answer = await promptedAnswer(page);
+    for (const digit of String(answer)) {
+      await page.tap(`.key[data-digit="${digit}"]`);
+    }
+    await expect(page.locator("#typed-answer")).toHaveText(String(answer));
+
+    await page.tap(".key-enter");
+    await expect(page.locator("#overlay")).toHaveAttribute("data-visible", "true");
+
+    expect(errors).toEqual([]);
+    await ctx.close();
+  });
+
   test("backspace removes a digit rather than clearing the whole entry", async ({ page }) => {
     await seed(page, { lastMapShownDay: TODAY() });
     await page.goto("/");
