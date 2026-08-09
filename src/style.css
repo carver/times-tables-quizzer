@@ -227,6 +227,10 @@ body {
   border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
   background: Canvas;
   color: CanvasText;
+  /* Without this, mobile browsers spend time disambiguating each tap as
+     a possible scroll/zoom gesture before committing to a click - on a
+     fast, light tap that disambiguation is exactly what drops the tap. */
+  touch-action: manipulation;
 }
 
 .key:active {
