@@ -27,6 +27,20 @@ jobs:
       - run: npm run typecheck
       - run: npm run test
 
+      # The e2e suite's second webServer (playwright.config.ts) is the
+      # Firebase Local Emulator Suite (docs/adr/0006) - its Firestore
+      # component is a JVM under the hood, which ubuntu-latest doesn't
+      # reliably ship on PATH by default, and firebase-tools downloads the
+      # emulator JAR on first use. Doing both explicitly here, as their own
+      # steps, means a failure shows up clearly and separately rather than
+      # as a silent "Process from config.webServer was not able to start"
+      # from inside Playwright with no further detail.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npx firebase setup:emulators:firestore
+
       # Only Chromium: this is a single-Learner app on one household's
       # devices, and the e2e suite exists to cover wiring (routing,
       # persistence across a reload, the takeover queue), not to chase

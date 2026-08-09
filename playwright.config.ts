@@ -38,7 +38,10 @@ export default defineConfig({
     // Firestore's port alone reports "ready" while Auth is still
     // warming up and signInAnonymously calls would fail outright.
     {
-      command: "firebase emulators:start --only firestore,auth --project demo-times-tables-quizzer",
+      // `npx firebase`, not a bare `firebase` - guarantees resolution via
+      // the local firebase-tools devDependency regardless of whether the
+      // spawning shell happens to have node_modules/.bin on PATH.
+      command: "npx firebase emulators:start --only firestore,auth --project demo-times-tables-quizzer",
       url: "http://127.0.0.1:9200/",
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
