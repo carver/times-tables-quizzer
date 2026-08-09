@@ -960,3 +960,32 @@ body[data-idle-confirm="true"] .keypad {
   color: inherit;
   opacity: 0.7;
 }
+
+/* A newly deployed version has activated in the background (main.ts's
+   service-worker update check) - pinned to the top so it's noticed
+   without covering anything the Learner is reading below it. Shown only
+   on the map and stats screens (updateBannerVisibility); never the quiz,
+   where nothing should compete for attention mid-question. */
+.update-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+}
+
+.update-banner[hidden] {
+  display: none;
+}
+
+#update-banner-button {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  border: none;
+  background: var(--accent);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}

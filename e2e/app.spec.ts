@@ -1,5 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
+import { appendFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { answerWithKeypad, promptedAnswer, readSave, seed, TODAY, YESTERDAY } from "./helpers";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Every spec asserts the page produced no uncaught errors. Wiring bugs in
 // main.ts (a missing element id, a bad dataset key) surface as a thrown
@@ -547,5 +552,49 @@ test.describe("home-screen install", () => {
     if (!isOn) {
       await expect(page.locator("#reminder-hint")).toBeVisible();
     }
+  });
+});
+
+test.describe("the app-update banner", () => {
+  test("appears once a newly deployed service worker activates, only on the map and stats screens", async ({
+    page,
+  }) => {
+    const errors = trackPageErrors(page);
+    await page.goto("/");
+
+    // The very first load is never "claimed" (sw.ts has no
+    // clients.claim()), so this page has no controller yet - a reload is
+    // what makes the just-activated worker genuinely control it, the
+    // same state any real return visit would be in.
+    await expect
+      .poll(() => page.evaluate(() => navigator.serviceWorker.ready.then(() => true)))
+      .toBe(true);
+    await page.reload();
+    await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+
+    // Force a genuine byte-level difference in the built sw.js - the same
+    // file the preview server is serving from disk - so the browser's
+    // next registration.update() actually finds something to install,
+    // exactly like a real deploy landing while this tab stayed open.
+    const swPath = join(__dirname, "..", "dist", "sw.js");
+    appendFileSync(swPath, `\n// e2e-forced-update-${Date.now()}\n`);
+    await page.evaluate(() => navigator.serviceWorker.getRegistration().then((r) => r?.update()));
+
+    await expect(page.locator("#update-banner")).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("#screen-map")).toHaveAttribute("data-active", "true");
+
+    // Never on the quiz - nothing should compete for attention mid-question.
+    await page.click("#practice-link");
+    await expect(page.locator("#update-banner")).toBeHidden();
+
+    await page.click("#map-link");
+    await expect(page.locator("#update-banner")).toBeVisible();
+
+    // Tapping it is just a reload - the new worker is already activated
+    // and ready to take over.
+    await page.click("#update-banner-button");
+    await expect(page.locator("#screen-map")).toHaveAttribute("data-active", "true");
+
+    expect(errors).toEqual([]);
   });
 });

@@ -249,6 +249,16 @@ getEl<HTMLDivElement>("app").innerHTML = `
     <a class="reset-cancel" id="reset-cancel" href="#/map">Leave it alone</a>
   </section>
 
+  <!-- Lives outside the three routed <section>s, same reasoning as
+       .takeover below - which screens it's allowed on is a JS-owned rule
+       (updateBannerVisibility), not something a fixed position in the
+       markup could express, since it's shown on two of the three routes
+       (map, stats) and deliberately never the quiz: nothing should
+       compete for a Learner's attention mid-question. -->
+  <div class="update-banner" id="update-banner" hidden>
+    <button type="button" id="update-banner-button">A new version is ready — tap to update</button>
+  </div>
+
   <!-- ticket #13: the takeover for range-expansion and Milestone Celebrations
        (CONTEXT.md's Celebration entry - "fills the screen and waits for the
        Learner to dismiss it"). Lives outside the three routed <section>s -
@@ -309,6 +319,9 @@ const keypadEl = getEl<HTMLElement>("keypad");
 const takeoverEl = getEl<HTMLDivElement>("takeover");
 const takeoverGridEl = getEl<HTMLDivElement>("takeover-grid");
 const takeoverTitleEl = getEl<HTMLParagraphElement>("takeover-title");
+
+const updateBannerEl = getEl<HTMLDivElement>("update-banner");
+const updateBannerButtonEl = getEl<HTMLButtonElement>("update-banner-button");
 
 const statsScreenEl = getEl<HTMLElement>("screen-stats");
 const resetScreenEl = getEl<HTMLElement>("screen-reset");
@@ -1308,11 +1321,87 @@ if (isIOS && !isStandalone) {
   iosInstallHintEl.hidden = false;
 }
 
+// Shown once a newer deployed version has activated in the background -
+// sw.ts calls self.skipWaiting() unconditionally, so a new version takes
+// over as *the* active worker without ever waiting on this tab, but
+// without clients.claim() it still doesn't take over *this already-open
+// page* until a reload. That gap is exactly what the banner is for: the
+// Learner is running stale JS against what's now an outdated deploy, and
+// a tap reloads onto the version the new worker already has ready.
+let updateAvailable = false;
+
+function updateBannerVisibility() {
+  const route = routeFromHash(window.location.hash);
+  // Never the quiz (or the unlisted reset screen) - nothing should
+  // compete for attention mid-question, and there's no rush: the update
+  // is already sitting there activated, waiting for whenever the Learner
+  // next lands on the map or stats.
+  const eligibleRoute = route === "map" || route === "stats";
+  updateBannerEl.hidden = !(updateAvailable && eligibleRoute);
+}
+
+updateBannerButtonEl.addEventListener("click", () => window.location.reload());
+
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {
-    // Best-effort: a failed registration only costs install eligibility
-    // and background reminders, never the ability to practice.
-  });
+  navigator.serviceWorker
+    .register("./sw.js")
+    .then((registration) => {
+      registration.addEventListener("updatefound", () => {
+        const installing = registration.installing;
+        if (!installing) return;
+        // A controller already existed *before* this new worker showed up
+        // - i.e. this is a real update replacing one already serving the
+        // page, not this tab's own first-ever install (which also runs
+        // through "installing" -> "activated" but has nothing to update
+        // away from).
+        const isGenuineUpdate = navigator.serviceWorker.controller !== null;
+        installing.addEventListener("statechange", () => {
+          if (isGenuineUpdate && installing.state === "activated") {
+            updateAvailable = true;
+            updateBannerVisibility();
+          }
+        });
+      });
+
+      // The registration itself doesn't re-check the network on its own -
+      // registration.update() is what actually asks the server for a
+      // fresh copy of sw.js and kicks off "updatefound" if it differs.
+      // Deferred past the load event (and an extra beat past that) so
+      // this never competes with anything the initial paint needs, then
+      // re-checked occasionally rather than on some tight poll: once on
+      // returning to the tab (a Learner is most likely to have missed a
+      // deploy after being away a while - throttled so rapid tab
+      // switching can't spam it) plus a periodic fallback for a tab that
+      // just stays open.
+      const checkForUpdate = () => void registration.update();
+      const RECHECK_MIN_INTERVAL_MS = 5 * 60_000;
+      const PERIODIC_RECHECK_MS = 60 * 60_000;
+      let lastCheckAt = 0;
+      const checkIfDue = () => {
+        const now = Date.now();
+        if (now - lastCheckAt < RECHECK_MIN_INTERVAL_MS) return;
+        lastCheckAt = now;
+        checkForUpdate();
+      };
+
+      // Guards against the "load" event having already fired before this
+      // listener attaches (a real risk this far down an async .then chain,
+      // not just theoretical) - in which case it would simply never come.
+      const scheduleFirstCheck = () => setTimeout(checkIfDue, 5_000);
+      if (document.readyState === "complete") {
+        scheduleFirstCheck();
+      } else {
+        window.addEventListener("load", scheduleFirstCheck);
+      }
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") checkIfDue();
+      });
+      setInterval(checkIfDue, PERIODIC_RECHECK_MS);
+    })
+    .catch(() => {
+      // Best-effort: a failed registration only costs install eligibility
+      // and background reminders, never the ability to practice.
+    });
 }
 
 // The stats legend's swatches are static markup (unlike the grids, never
@@ -1362,6 +1451,7 @@ function applyRoute(route: Route) {
   // A tooltip anchored to a now-hidden cell would otherwise stay stuck
   // on screen after navigating away.
   hideStatsTooltip();
+  updateBannerVisibility();
 
   // Arriving at the quiz screen from elsewhere (as opposed to already
   // being on it) is a fresh "Start practice" - factShownAt must restart
