@@ -17,7 +17,7 @@ A single multiplication combination (e.g., "7 × 8") — the atomic unit the Lea
 _Avoid_: Problem, question
 
 **Attempt**:
-One instance of the Learner being shown a Fact and responding. Produces a correctness result and a response time. Retyping the correct answer after getting a Fact wrong is *not* an Attempt — it's practice, not measurement, and it never feeds Fluency, Accuracy, or the Streak.
+One instance of the Learner being shown a Fact and responding. Produces a correctness result and a response time. Retyping the correct answer after getting a Fact wrong is *not* an Attempt — it's practice, not measurement, and it never feeds Fluency, Accuracy, or the Streak. A response time is capped (`MAX_RESPONSE_MS` in engine.ts) before it can feed Fluency or a personal-best comparison — the clock measures recall speed, not how long the Learner was away from the phone before answering.
 _Avoid_: Try, guess, answer (as a noun for the event)
 
 **Active range**:

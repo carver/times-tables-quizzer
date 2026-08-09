@@ -1276,6 +1276,8 @@ function applyRoute(route: Route) {
   // at boot.
   applyPendingRemoteUpdate(route);
 
+  const arrivingAtQuiz = route === "quiz" && quizScreenEl.dataset.active !== "true";
+
   mapScreenEl.dataset.active = String(route === "map");
   quizScreenEl.dataset.active = String(route === "quiz");
   statsScreenEl.dataset.active = String(route === "stats");
@@ -1283,6 +1285,12 @@ function applyRoute(route: Route) {
   // A tooltip anchored to a now-hidden cell would otherwise stay stuck
   // on screen after navigating away.
   hideStatsTooltip();
+
+  // Arriving at the quiz screen from elsewhere (as opposed to already
+  // being on it) is a fresh "Start practice" - factShownAt must restart
+  // here too, or a Learner who leaves the quiz screen idle and comes
+  // back has their response time measured from the original visit.
+  if (arrivingAtQuiz) quizState = restartFactTimer(quizState, deps);
 
   if (route === "map") renderMap();
   if (route === "quiz") renderQuiz();

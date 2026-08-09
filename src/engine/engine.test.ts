@@ -10,6 +10,7 @@ import {
   NEW_STREAK,
   nextActiveRange,
   submitAttempt,
+  MAX_RESPONSE_MS,
   TARGET_SPEED_MS,
   typingAllowanceMs,
   UNATTEMPTED_WEIGHT_MS,
@@ -371,6 +372,14 @@ describe("submitAttempt", () => {
     const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 1500 }, deps());
 
     expect(result.state.fluency["1x1"]).toEqual({ averageResponseMs: 1500, lastAttemptAt: 0 });
+  });
+
+  it("clamps an implausibly long response time before it can seed Fluency", () => {
+    const state = createInitialState({ size: 1 }, deps());
+
+    const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 5 * 60_000 }, deps());
+
+    expect(result.state.fluency["1x1"]).toEqual({ averageResponseMs: MAX_RESPONSE_MS, lastAttemptAt: 0 });
   });
 
   it("blends subsequent correct Attempts into Fluency as a recency-weighted average", () => {

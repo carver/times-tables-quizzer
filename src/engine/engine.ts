@@ -199,6 +199,13 @@ export function computeWeight(
 // pressing Enter - and 2s proved a tight bar for a nine-year-old.
 export const TARGET_SPEED_MS = 2_500;
 
+// A response time this long isn't a slow answer, it's a Learner who
+// walked away mid-question and came back - the fact prompt has no
+// timeout of its own, so responseTimeMs is otherwise unbounded. Clamping
+// it keeps a single abandoned-and-resumed question from corrupting
+// Fluency's average or falsely winning "personal best".
+export const MAX_RESPONSE_MS = 30_000;
+
 // Share of the Active range that must be Mastered before it expands.
 export const MASTERY_THRESHOLD = 0.9;
 
@@ -438,6 +445,7 @@ export function submitAttempt(
   const correct = state.fact.a * state.fact.b === event.answer;
   const key = factKey(state.fact);
   const now = deps.now();
+  const responseTimeMs = Math.min(event.responseTimeMs, MAX_RESPONSE_MS);
 
   const boosted = decrementBoosts(state.boosted, key);
   const fluency = { ...state.fluency };
@@ -455,13 +463,13 @@ export function submitAttempt(
     // average by the whole allowance. The allowance belongs on the
     // progression target, where it compares different Facts to a shared
     // bar and the digit count genuinely differs.
-    const beatsBaseline = previous !== undefined && event.responseTimeMs < baselineMs;
+    const beatsBaseline = previous !== undefined && responseTimeMs < baselineMs;
     celebrations.push(celebration(beatsBaseline ? "personal-best" : "correctness-only"));
 
     fluency[key] = {
       averageResponseMs: previous
-        ? RECENCY_WEIGHT * event.responseTimeMs + (1 - RECENCY_WEIGHT) * previous.averageResponseMs
-        : event.responseTimeMs,
+        ? RECENCY_WEIGHT * responseTimeMs + (1 - RECENCY_WEIGHT) * previous.averageResponseMs
+        : responseTimeMs,
       lastAttemptAt: now,
     };
 

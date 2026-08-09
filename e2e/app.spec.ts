@@ -172,6 +172,35 @@ test.describe("takeover Celebrations", () => {
     expect(recorded).toBeLessThan(3_000);
   });
 
+  test("does not bill idle time at home for a Fact re-shown after leaving and returning to the quiz", async ({
+    page,
+  }) => {
+    // Same underlying property as the takeover test above, but for the
+    // navigation path: leaving the quiz for the map and coming back is
+    // "Start practice" again, and must restart the clock just as freshly
+    // as the very first visit does - otherwise time spent away from the
+    // phone gets billed to whichever Fact happens to be showing.
+    const errors = trackPageErrors(page);
+    await seed(page, { masteredCount: 24, lastMapShownDay: TODAY() });
+    await page.goto("/");
+
+    await page.waitForTimeout(3_000);
+    await page.click("#map-link");
+    await expect(page).toHaveURL(/#\/map$/);
+
+    await page.waitForTimeout(3_000);
+    await page.click("#practice-link");
+    await expect(page).toHaveURL(/#\/quiz$/);
+
+    const key = ((await page.locator("#prompt").textContent()) ?? "").match(/\d+/g)!.slice(0, 2).join("x");
+    await answerWithKeypad(page, await promptedAnswer(page));
+
+    const recorded = (await readSave(page)).fluency[key].averageResponseMs;
+    expect(recorded).toBeLessThan(3_000);
+
+    expect(errors).toEqual([]);
+  });
+
   test("one Attempt that both expands the range and hits a Milestone shows both, expansion first", async ({
     page,
   }) => {
