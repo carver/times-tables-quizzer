@@ -447,6 +447,18 @@ body {
   background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
+/* Pairs closely-related actions (Copy link / Show QR code - both just
+   different ways to hand the same link to another device) side by side
+   instead of each taking its own full-width row. */
+.sync-action-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.sync-action-row .sync-action {
+  flex: 1;
+}
+
 /* "Stop syncing" - a real, reversible action (re-pairing is one link
    away), but still not something to visually compete with the actions
    above it. */

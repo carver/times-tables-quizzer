@@ -128,17 +128,18 @@ getEl<HTMLDivElement>("app").innerHTML = `
         </div>
         <div id="sync-paired-actions" hidden>
           <p class="sync-status" id="sync-status"></p>
-          <button type="button" class="sync-action" id="copy-sync-link-button">Copy sync link to share</button>
-          <button type="button" class="sync-action" id="show-qr-button">Show QR code</button>
+          <div class="sync-action-row">
+            <button type="button" class="sync-action" id="copy-sync-link-button">Copy link</button>
+            <button type="button" class="sync-action" id="show-qr-button">Show QR code</button>
+          </div>
           <div class="qr-code-wrap" id="qr-code-wrap" hidden></div>
-          <button type="button" class="sync-action" id="new-profile-button">Start a new profile</button>
+          <div id="profile-switcher-wrap">
+            <p class="settings-hint">Profiles:</p>
+            <div id="profile-switcher"></div>
+          </div>
           <div id="new-profile-form" hidden>
             <input type="text" class="sync-input" id="new-profile-name-input" placeholder='Name this profile (e.g. "Sam")' />
             <button type="button" class="sync-action" id="new-profile-confirm-button">Create</button>
-          </div>
-          <div id="profile-switcher-wrap" hidden>
-            <p class="settings-hint">Switch profile:</p>
-            <div id="profile-switcher"></div>
           </div>
           <button type="button" class="sync-action sync-action--quiet" id="stop-syncing-button">
             Stop syncing on this device
@@ -314,11 +315,9 @@ const syncStatusEl = getEl<HTMLParagraphElement>("sync-status");
 const copySyncLinkButtonEl = getEl<HTMLButtonElement>("copy-sync-link-button");
 const showQrButtonEl = getEl<HTMLButtonElement>("show-qr-button");
 const qrCodeWrapEl = getEl<HTMLDivElement>("qr-code-wrap");
-const newProfileButtonEl = getEl<HTMLButtonElement>("new-profile-button");
 const newProfileFormEl = getEl<HTMLDivElement>("new-profile-form");
 const newProfileNameInputEl = getEl<HTMLInputElement>("new-profile-name-input");
 const newProfileConfirmButtonEl = getEl<HTMLButtonElement>("new-profile-confirm-button");
-const profileSwitcherWrapEl = getEl<HTMLDivElement>("profile-switcher-wrap");
 const profileSwitcherEl = getEl<HTMLDivElement>("profile-switcher");
 const stopSyncingButtonEl = getEl<HTMLButtonElement>("stop-syncing-button");
 const syncHintEl = getEl<HTMLParagraphElement>("sync-hint");
@@ -547,25 +546,17 @@ function renderSyncPanel() {
   renderProfileSwitcher();
 }
 
-// Only ever shows anything once a device has paired with a *second*
-// Profile (not part of this pass's scope to build creating one, but the
-// data model - profilePairing.ts's array - already supports it without
-// a rework, and a device could still end up with two via two separate
-// "Join" actions) - see docs/adr/0006's "Profile, not Household" section
-// for why. A device with zero or one paired Profile sees no switcher at
-// all, matching "don't make me re-pair every time we switch" without
-// cluttering the common case with UI for a case that isn't happening.
+// One pill row doing double duty as the Profile switcher and the
+// "start a new Profile" entry point, rather than two separately-shown
+// blocks (a standalone "Start a new profile" button plus a switcher
+// that only ever appeared once a second Profile already existed) - see
+// docs/adr/0006's "Profile, not Household" section for why a device can
+// end up paired with more than one. Always shown whenever this device
+// is paired with at least one, even just its own.
 function renderProfileSwitcher() {
-  const profiles = pairedProfiles();
-  if (profiles.length <= 1) {
-    profileSwitcherWrapEl.hidden = true;
-    return;
-  }
-
-  profileSwitcherWrapEl.hidden = false;
   profileSwitcherEl.innerHTML = "";
   const active = activeProfile();
-  for (const profile of profiles) {
+  for (const profile of pairedProfiles()) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "settings-link";
@@ -575,6 +566,17 @@ function renderProfileSwitcher() {
     button.addEventListener("click", () => void switchToProfile(profile.profileId));
     profileSwitcherEl.appendChild(button);
   }
+
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  addButton.id = "new-profile-button";
+  addButton.className = "settings-link";
+  addButton.textContent = "+ New";
+  addButton.addEventListener("click", () => {
+    newProfileFormEl.hidden = !newProfileFormEl.hidden;
+    if (!newProfileFormEl.hidden) newProfileNameInputEl.focus();
+  });
+  profileSwitcherEl.appendChild(addButton);
 }
 
 // A document from before Profiles carried a name (or a corrupted write)
@@ -656,7 +658,7 @@ async function startSharing(rawLabel: string): Promise<void> {
   addPairedProfile({ profileId, label });
   startSyncing(profileId);
   renderSyncPanel();
-  showSyncHint('Ready — tap "Copy sync link to share" and send it to the other phone.');
+  showSyncHint('Ready — tap "Copy link" and send it to the other phone.');
 }
 
 function completeJoin(profileId: string, remoteEngine: EngineState, label: string) {
@@ -1294,11 +1296,6 @@ startSharingConfirmButtonEl.addEventListener("click", () => {
   void startSharing(startSharingNameInputEl.value);
 });
 
-newProfileButtonEl.addEventListener("click", () => {
-  newProfileFormEl.hidden = !newProfileFormEl.hidden;
-  if (!newProfileFormEl.hidden) newProfileNameInputEl.focus();
-});
-
 newProfileConfirmButtonEl.addEventListener("click", () => {
   void startNewProfile(newProfileNameInputEl.value);
 });
@@ -1619,7 +1616,7 @@ if (pairedProfile) {
 }
 
 // A pairing link (route.ts's joinProfileIdFromHash - "#/join/<id>", from
-// "Copy sync link to share") is a one-time action, not a screen with its
+// "Copy link") is a one-time action, not a screen with its
 // own back-button-navigable state - consumed here once (the hash was
 // already normalized to the map above, as part of the landing decision).
 if (joinProfileId) {
