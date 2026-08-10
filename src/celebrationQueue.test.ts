@@ -6,6 +6,7 @@ import {
   EMPTY_TAKEOVER_QUEUE,
   enqueueTakeovers,
   inlineCelebrations,
+  missedRangeExpansionTakeovers,
   takeoverCelebrations,
 } from "./celebrationQueue";
 
@@ -108,5 +109,27 @@ describe("takeover queue", () => {
     }
 
     expect(shown).toEqual([rangeExpansion, milestone]);
+  });
+});
+
+describe("missedRangeExpansionTakeovers", () => {
+  it("returns nothing when the current size is already acknowledged", () => {
+    expect(missedRangeExpansionTakeovers(6, 6)).toEqual([]);
+  });
+
+  it("returns one takeover for a single missed expansion, carrying that size", () => {
+    expect(missedRangeExpansionTakeovers(5, 6)).toEqual([{ kind: "range-expansion", tag: "takeover", rangeSize: 6 }]);
+  });
+
+  // A Learner who progressed through several grids before a takeover
+  // ever got the chance to be dismissed (this file's whole motivating
+  // bug) gets every one of them replayed, in the order actually reached
+  // - not just a single takeover for wherever they ended up.
+  it("returns one takeover per missed size, oldest first, each carrying its own size", () => {
+    expect(missedRangeExpansionTakeovers(5, 8)).toEqual([
+      { kind: "range-expansion", tag: "takeover", rangeSize: 6 },
+      { kind: "range-expansion", tag: "takeover", rangeSize: 7 },
+      { kind: "range-expansion", tag: "takeover", rangeSize: 8 },
+    ]);
   });
 });

@@ -24,6 +24,11 @@ export const YESTERDAY = () => dayKey(new Date(Date.now() - 86_400_000));
 type Seed = {
   masteredCount?: number;
   activeRangeSize?: number;
+  // Defaults to activeRangeSize - "no takeover currently owed", the
+  // common case. Set lower than activeRangeSize to simulate a
+  // range-expansion takeover that was never actually dismissed (main.ts's
+  // boot-time catch-up, celebrationQueue.ts's missedRangeExpansionTakeovers).
+  acknowledgedRangeSize?: number;
   fact?: { a: number; b: number };
   streak?: { count: number; lastStreakDay: string | null; lastActivityDay: string | null; missedDays: number };
   lastMapShownDay?: string | null;
@@ -60,6 +65,7 @@ export async function seed(page: Page, overrides: Seed = {}): Promise<void> {
     boosted: {},
     needsRedemption: {},
     rangeHistory: { [size]: now },
+    acknowledgedRangeSize: overrides.acknowledgedRangeSize ?? size,
     practiceDayCount: 3,
     streak: overrides.streak ?? { count: 0, lastStreakDay: null, lastActivityDay: null, missedDays: 0 },
     lastMapShownDay: overrides.lastMapShownDay ?? null,

@@ -16,7 +16,7 @@
 //      takeover simultaneously (CONTEXT.md), and the issue is explicit
 //      that two takeovers back to back is correct, not a bug to smooth
 //      over - so nothing here ever collapses the set down to one.
-import type { Celebration, CelebrationKind } from "./engine/engine";
+import { celebration, type Celebration, type CelebrationKind } from "./engine/engine";
 
 // Range expansion always plays before a Milestone when a single Attempt
 // produces both (the issue body: "takeovers queue and play in sequence,
@@ -83,4 +83,22 @@ export function enqueueTakeovers(queue: TakeoverQueue, celebrations: Celebration
 // means the best moment in the app can be missed by looking away").
 export function dismissCurrentTakeover(queue: TakeoverQueue): TakeoverQueue {
   return queue.slice(1);
+}
+
+// A boot-time catch-up: `activeRange.size` can be ahead of
+// `acknowledgedRangeSize` (engine.ts) if a takeover was raised but never
+// actually dismissed - a real, confirmed failure mode, not hypothetical
+// (a touch tap's trailing `click` landing back on the takeover itself
+// and dismissing it before it was ever seen; see main.ts's keypad
+// listener). Rather than the progress just quietly being there next
+// time with no celebration for it, one takeover per missed size is
+// queued, in the order they were actually reached, each carrying its
+// own size so the takeover can show the grid as it looked at that exact
+// moment rather than the Learner's current, further-along progress.
+export function missedRangeExpansionTakeovers(acknowledgedSize: number, currentSize: number): Celebration[] {
+  const missed: Celebration[] = [];
+  for (let size = acknowledgedSize + 1; size <= currentSize; size++) {
+    missed.push(celebration("range-expansion", size));
+  }
+  return missed;
 }

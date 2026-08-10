@@ -206,6 +206,80 @@ test.describe("takeover Celebrations", () => {
     expect(errors).toEqual([]);
   });
 
+  // Regression for a real report: a Learner progressed through two grids
+  // in one sitting but never saw a celebration for either. Root cause -
+  // Enter is handled on `pointerdown` for touch (see main.ts's keypad
+  // listener), so a tap can reveal this takeover synchronously the
+  // instant the finger lands. The same physical tap still produces a
+  // trailing `click` afterward, and a browser computes that click's
+  // target from the DOM as it looks at dispatch time - which is now
+  // this takeover, freshly covering the same screen coordinates. Left
+  // unguarded, the takeover dismissed itself within the same tap that
+  // raised it, before ever being seen. A mouse `.click()` (every other
+  // test in this file) never exercises the pointerdown path at all, so
+  // only a real touch tap can catch this.
+  test("a takeover raised by a touch tap is not immediately self-dismissed by that same tap's trailing click", async ({
+    browser,
+  }) => {
+    const ctx = await browser.newContext({ hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = trackPageErrors(page);
+    await seed(page, { masteredCount: 24, lastMapShownDay: TODAY() });
+    await page.goto("/");
+
+    const answer = await promptedAnswer(page);
+    for (const digit of String(answer)) {
+      await page.tap(`.key[data-digit="${digit}"]`);
+    }
+    await page.tap(".key-enter");
+
+    const takeover = page.locator("#takeover");
+    // No wait here on purpose - this is exactly the window the bug lived
+    // in. A pre-fix run finds this already dismissed.
+    await expect(takeover).toHaveAttribute("data-visible", "true");
+    await expect(takeover).toHaveAttribute("data-kind", "range-expansion");
+
+    // A later, genuine tap still dismisses it normally, once the
+    // ghost-click guard's own short window has passed.
+    await page.waitForTimeout(600);
+    await page.tap("#takeover");
+    await expect(takeover).toHaveAttribute("data-visible", "false");
+    expect((await readSave(page)).activeRange.size).toBe(6);
+
+    expect(errors).toEqual([]);
+    await ctx.close();
+  });
+
+  // Regression coverage for the same real report, from the other
+  // direction: a session that genuinely did end (app closed, reload,
+  // etc.) before a range-expansion takeover was ever dismissed must not
+  // lose it - main.ts replays it on the next load instead.
+  test("a range-expansion takeover missed in a previous session is replayed on the next load, oldest first", async ({
+    page,
+  }) => {
+    const errors = trackPageErrors(page);
+    // The Active range reached 8x8, but only a takeover for 6x6 was ever
+    // actually dismissed - 7x7's and 8x8's were lost.
+    await seed(page, { activeRangeSize: 8, acknowledgedRangeSize: 5, lastMapShownDay: TODAY() });
+    await page.goto("/");
+
+    const takeover = page.locator("#takeover");
+    await expect(takeover).toHaveAttribute("data-visible", "true");
+    await expect(takeover).toHaveAttribute("data-kind", "range-expansion");
+
+    // Three missed sizes (6, 7, 8) - replayed one at a time, not
+    // collapsed into a single "you're now at 8x8" takeover.
+    await takeover.click();
+    await expect(takeover).toHaveAttribute("data-visible", "true");
+    await takeover.click();
+    await expect(takeover).toHaveAttribute("data-visible", "true");
+    await takeover.click();
+    await expect(takeover).toHaveAttribute("data-visible", "false");
+
+    expect((await readSave(page)).acknowledgedRangeSize).toBe(8);
+    expect(errors).toEqual([]);
+  });
+
   test("hides the next Fact and does not bill the celebration's duration to it", async ({ page }) => {
     // Both halves of the same problem: input is swallowed while a
     // takeover is up, so the next Fact must not be readable through it,

@@ -79,6 +79,14 @@ export type EngineState = {
   // other Facts' Attempts.
   needsRedemption: Record<FactKey, boolean>;
   rangeHistory: RangeHistory;
+  // The highest Active range size the Learner has actually seen a
+  // range-expansion takeover dismissed for - not just reached. The two
+  // can diverge: a takeover queued but never shown/dismissed (e.g. the
+  // app closing at exactly the wrong moment) leaves this behind
+  // `activeRange.size`, which is what main.ts's boot-time catch-up
+  // (celebrationQueue.ts's missedRangeExpansionTakeovers) checks for -
+  // never dropped silently just because progress itself was persisted.
+  acknowledgedRangeSize: number;
   streak: StreakState;
   // Count of distinct calendar days (dayKey) with at least one Attempt -
   // ticket #12's statistics header ("days practiced and current Streak,
@@ -325,6 +333,14 @@ export type CelebrationTag = "inline" | "takeover";
 export type Celebration = {
   kind: CelebrationKind;
   tag: CelebrationTag;
+  // The Active range size this expansion reached - only meaningful (and
+  // always present) for kind "range-expansion". Threaded through rather
+  // than read live off `activeRange.size` at display time, since a
+  // boot-time catch-up (celebrationQueue.ts's missedRangeExpansionTakeovers)
+  // can replay several past expansions in order, each needing its own
+  // size for the takeover's grid - by the time they're shown,
+  // `activeRange.size` has already moved past all of them.
+  rangeSize?: number;
 };
 
 // milestone and range-expansion mark rare, weeks-in-the-making moments
@@ -338,8 +354,8 @@ const CELEBRATION_TAGS: Record<CelebrationKind, CelebrationTag> = {
   "range-expansion": "takeover",
 };
 
-function celebration(kind: CelebrationKind): Celebration {
-  return { kind, tag: CELEBRATION_TAGS[kind] };
+export function celebration(kind: CelebrationKind, rangeSize?: number): Celebration {
+  return { kind, tag: CELEBRATION_TAGS[kind], rangeSize };
 }
 
 // A single Attempt can plausibly be a personal best, expand the Active
@@ -401,6 +417,9 @@ export function createInitialState(range: ActiveRange, deps: Dependencies): Engi
     // The starting size counts as "reached" the moment there's a state
     // to have a history at all, same as every later expansion.
     rangeHistory: { [range.size]: deps.now() },
+    // The starting size was never earned, so it needs no celebration -
+    // same reasoning as rangeHistory just above.
+    acknowledgedRangeSize: range.size,
     streak: NEW_STREAK,
     // No Attempt has happened yet - the first submitAttempt call is what
     // brings this to 1 (same "nothing counts until an Attempt actually
@@ -494,7 +513,7 @@ export function submitAttempt(
   const activeRange = nextActiveRange({ activeRange: state.activeRange, fluency, needsRedemption }, now);
   const expanded = activeRange.size !== state.activeRange.size;
   const rangeHistory = expanded ? { ...state.rangeHistory, [activeRange.size]: now } : state.rangeHistory;
-  if (expanded) celebrations.push(celebration("range-expansion"));
+  if (expanded) celebrations.push(celebration("range-expansion", activeRange.size));
 
   // Compared against the PRE-update streak (not the `streak` advanceStreak
   // returns below) since lastActivityDay advances to `today` on every

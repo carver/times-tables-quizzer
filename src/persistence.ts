@@ -32,7 +32,17 @@ const STORAGE_KEY = "times-tables-quizzer:state";
 // own `version` rather than just checking `size === 5`, or a brand-new
 // save that legitimately grows to size 5 would get knocked back down to
 // 2 on every subsequent load.
-export const CURRENT_SAVE_VERSION = 6;
+// Version 7 adds `acknowledgedRangeSize` - the highest Active range size
+// a range-expansion takeover has actually been dismissed for, distinct
+// from `activeRange.size` itself so a takeover that never got shown
+// (e.g. the app closing at exactly the wrong moment) can be replayed on
+// the next load instead of silently lost (main.ts's boot-time catch-up).
+// A save from before this version has no record of what was actually
+// seen, so it defaults to the save's own (already-migrated) current
+// size - hold-harmless for everything already earned before this
+// feature existed, same reasoning as every default above: only
+// expansions from here on are tracked and can trigger a catch-up.
+export const CURRENT_SAVE_VERSION = 7;
 const PRE_V6_INITIAL_ACTIVE_RANGE_SIZE = 5;
 const NEW_INITIAL_ACTIVE_RANGE_SIZE = 2;
 
@@ -110,6 +120,7 @@ function migrate(value: Record<string, unknown>): PersistedState | null {
     accuracy: isRecord(value.accuracy) ? (value.accuracy as EngineState["accuracy"]) : {},
     needsRedemption: isRecord(value.needsRedemption) ? (value.needsRedemption as EngineState["needsRedemption"]) : {},
     rangeHistory: isRecord(value.rangeHistory) ? (value.rangeHistory as EngineState["rangeHistory"]) : {},
+    acknowledgedRangeSize: typeof value.acknowledgedRangeSize === "number" ? value.acknowledgedRangeSize : activeRange.size,
     // Absent/malformed defaults to 0, same as a save that predates this
     // field entirely (see CURRENT_SAVE_VERSION's version-3 comment above).
     practiceDayCount: typeof value.practiceDayCount === "number" ? value.practiceDayCount : 0,

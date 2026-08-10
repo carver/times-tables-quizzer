@@ -39,6 +39,7 @@ const fullEngineState: EngineState = {
   boosted: { "4x4": 3 },
   needsRedemption: { "5x5": true },
   rangeHistory: { 5: 500 },
+  acknowledgedRangeSize: 5,
   streak: { ...NEW_STREAK, count: 2 },
   practiceDayCount: 7,
 };
@@ -97,6 +98,7 @@ describe("migration", () => {
         accuracy: {},
         needsRedemption: {},
         rangeHistory: {},
+        acknowledgedRangeSize: 3,
         practiceDayCount: 0,
       },
       lastMapShownDay: null,
@@ -129,7 +131,7 @@ describe("migration", () => {
     const loaded = loadState();
 
     expect(loaded).toEqual({
-      engine: { ...preTicket11Save, practiceDayCount: 0 },
+      engine: { ...preTicket11Save, acknowledgedRangeSize: 3, practiceDayCount: 0 },
       lastMapShownDay: null,
       muted: false,
       remindersEnabled: false,
@@ -237,6 +239,34 @@ describe("migration", () => {
     const loaded = loadState();
 
     expect(loaded?.engine.activeRange).toEqual({ size: 5 });
+  });
+
+  it("defaults acknowledgedRangeSize to the save's own current size for a save that predates it - nothing owed retroactively", () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...preV6NeverExpandedSave, activeRange: { size: 8 }, rangeHistory: { 6: 100, 7: 200, 8: 300 } }),
+    );
+
+    const loaded = loadState();
+
+    expect(loaded?.engine.acknowledgedRangeSize).toBe(8);
+  });
+
+  it("round-trips an explicit acknowledgedRangeSize rather than overwriting it - a takeover still owed stays owed", () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        ...preV6NeverExpandedSave,
+        activeRange: { size: 8 },
+        rangeHistory: { 6: 100, 7: 200, 8: 300 },
+        acknowledgedRangeSize: 6,
+        version: CURRENT_SAVE_VERSION,
+      }),
+    );
+
+    const loaded = loadState();
+
+    expect(loaded?.engine.acknowledgedRangeSize).toBe(6);
   });
 
   it("discards a save missing core (pre-ticket-#10) fields rather than half-migrating it", () => {

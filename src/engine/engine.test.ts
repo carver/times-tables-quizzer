@@ -524,6 +524,7 @@ describe("submitAttempt", () => {
       boosted: {},
       needsRedemption: {},
       rangeHistory: { 2: 0 },
+      acknowledgedRangeSize: 2,
       streak: NEW_STREAK,
       practiceDayCount: 0,
     };
@@ -552,6 +553,7 @@ describe("submitAttempt", () => {
       boosted: { "1x2": 3 },
       needsRedemption: {},
       rangeHistory: { 2: 0 },
+      acknowledgedRangeSize: 2,
       streak: NEW_STREAK,
       practiceDayCount: 0,
     };
@@ -759,7 +761,7 @@ describe("submitAttempt", () => {
 
       const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 100 }, deps());
 
-      expect(result.celebrations).toContainEqual({ kind: "range-expansion", tag: "takeover" });
+      expect(result.celebrations).toContainEqual({ kind: "range-expansion", tag: "takeover", rangeSize: 2 });
     });
 
     it("does not add a range-expansion celebration or history entry when the range does not expand", () => {
@@ -817,7 +819,7 @@ describe("submitAttempt", () => {
       expect(result.celebrations).toEqual(
         expect.arrayContaining([
           { kind: "personal-best", tag: "inline" },
-          { kind: "range-expansion", tag: "takeover" },
+          { kind: "range-expansion", tag: "takeover", rangeSize: 2 },
           { kind: "milestone", tag: "takeover" },
         ]),
       );

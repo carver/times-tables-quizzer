@@ -3,9 +3,9 @@ import { initAudio, playSound, setMuted, type SoundKind } from "./audio";
 import {
   currentTakeover,
   dismissCurrentTakeover,
-  EMPTY_TAKEOVER_QUEUE,
   enqueueTakeovers,
   inlineCelebrations,
+  missedRangeExpansionTakeovers,
   type TakeoverQueue,
 } from "./celebrationQueue";
 import { createInitialState, MAX_ACTIVE_RANGE_SIZE, MAX_RESPONSE_MS, type Celebration, type CelebrationKind, type Dependencies, type EngineState, type Fact } from "./engine/engine";
@@ -376,7 +376,18 @@ let idleCheckArmedFor: number | undefined;
 // "still the same takeover, don't re-show/re-play it" apart from "a new
 // one just became current" purely by reference equality, without a
 // second identity scheme.
-let takeoverQueue: TakeoverQueue = EMPTY_TAKEOVER_QUEUE;
+//
+// Seeded at boot (rather than always starting empty) with any
+// range-expansion takeover this save reached but never actually got
+// dismissed for - see engine.ts's acknowledgedRangeSize and
+// celebrationQueue.ts's missedRangeExpansionTakeovers. Ahead of
+// syncTakeoverDisplay's first real call (applyRoute, below), so a
+// catch-up takeover renders on the very first paint rather than needing
+// a throwaway render to surface it.
+let takeoverQueue: TakeoverQueue = missedRangeExpansionTakeovers(
+  loaded.engine.acknowledgedRangeSize,
+  loaded.engine.activeRange.size,
+);
 let displayedTakeover: Celebration | undefined;
 
 // The Progress map's progress-to-expansion readout is monotonic within a
@@ -1061,12 +1072,16 @@ function syncTakeoverDisplay() {
 
   takeoverEl.dataset.kind = current.kind;
   takeoverTitleEl.textContent = celebrationText(current, quizState.engine.streak.count);
-  if (current.kind === "range-expansion") {
-    // The engine only ever grows the Active range by one step at a time
-    // (nextActiveRange), so the just-reached size IS the newly-filled
-    // row/column - no need to have captured the pre-expansion size
-    // separately.
-    buildProgressGrid(takeoverGridEl, quizState.engine.activeRange.size, quizState.engine.activeRange.size);
+  if (current.kind === "range-expansion" && current.rangeSize !== undefined) {
+    // Reads the size off the Celebration itself, not live off
+    // quizState.engine.activeRange.size - a boot-time catch-up
+    // (missedRangeExpansionTakeovers) can replay several past
+    // expansions in sequence, each needing to show the grid as it
+    // looked at that exact moment, not wherever the Learner has since
+    // progressed to. The engine only ever grows the Active range one
+    // step at a time (nextActiveRange), so the reached size IS the
+    // newly-filled row/column - no separate pre-expansion size needed.
+    buildProgressGrid(takeoverGridEl, current.rangeSize, current.rangeSize);
   }
   takeoverEl.dataset.visible = "true";
   // Belt and braces on top of the takeover's opaque backdrop: the quiz
@@ -1086,8 +1101,39 @@ function syncTakeoverDisplay() {
 // best moment in the app by looking away at the wrong instant, and that
 // two takeovers queued back to back (range-expansion then Milestone) is
 // correct behavior a timer would only get in the way of.
+//
+// A real bug this guards against: the takeover is often raised by Enter,
+// which - on touch - is handled on pointerdown (see the keypad listener
+// below) so it can appear the instant the finger lands, synchronously
+// hiding the keypad underneath. The same physical tap still produces a
+// trailing `click` a moment later, and a browser computes *that* click's
+// target from the DOM as it looks at dispatch time, not from where the
+// finger actually was - which is now this takeover, freshly covering
+// that exact spot. Left unguarded, the takeover dismisses itself within
+// the same tap that raised it, before a Learner ever sees it.
+//
+// Guarded against `lastPointerHandledAt` (below), not a fixed "just
+// became visible" timer: that variable is only ever set by a touch/pen
+// pointerdown, never a mouse click, so this only ever delays a dismissal
+// that's plausibly the ghost click trailing that same touch gesture. A
+// mouse dismissal - which was never at risk of this in the first place,
+// since mouse input never takes the pointerdown path below - is never
+// held up, however immediately it happens.
 function dismissTakeover() {
-  if (!currentTakeover(takeoverQueue)) return;
+  const current = currentTakeover(takeoverQueue);
+  if (!current) return;
+  if (performance.now() - lastPointerHandledAt < 500) return;
+
+  // The dismissal itself is the acknowledgment - see engine.ts's
+  // acknowledgedRangeSize and this queue's own boot-time seeding above.
+  // Persisted immediately (not batched into the next Attempt's persist())
+  // so a dismissed-but-not-yet-re-earned takeover can never come back on
+  // a reload right after this exact moment.
+  if (current.kind === "range-expansion" && current.rangeSize !== undefined) {
+    quizState = { ...quizState, engine: { ...quizState.engine, acknowledgedRangeSize: current.rangeSize } };
+    persist();
+  }
+
   takeoverQueue = dismissCurrentTakeover(takeoverQueue);
   syncTakeoverDisplay();
   // Paints the Fact that renderQuiz deliberately withheld while the
@@ -1642,6 +1688,11 @@ if (window.location.hash !== landingHash) {
   // can't rely on that event alone.
   window.location.hash = landingHash;
 }
+// Surfaces a boot-time catch-up takeover (takeoverQueue's own seeding,
+// above) on the very first paint - every other syncTakeoverDisplay call
+// site runs off the back of a just-submitted Attempt, which hasn't
+// happened yet this early.
+syncTakeoverDisplay();
 applyRoute(landing.route);
 
 // A device that paired with a Profile in an earlier session resumes
