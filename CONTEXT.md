@@ -17,8 +17,12 @@ A single multiplication combination (e.g., "7 × 8") — the atomic unit the Lea
 _Avoid_: Problem, question
 
 **Attempt**:
-One instance of the Learner being shown a Fact and responding. Produces a correctness result and a response time. Retyping the correct answer after getting a Fact wrong is *not* an Attempt — it's practice, not measurement, and it never feeds Fluency, Accuracy, or the Streak. A response time is capped (`MAX_RESPONSE_MS` in engine.ts) before it can feed Fluency or a personal-best comparison — the clock measures recall speed, not how long the Learner was away from the phone before answering.
+One instance of the Learner being shown a Fact and responding. Produces a correctness result and a response time. Only the *first* response to a Fact is an Attempt: neither the Retry that follows a wrong one nor retyping the correct answer afterwards is an Attempt — both are practice, not measurement, and never feed Fluency, Accuracy, or the Streak. A response time is capped (`MAX_RESPONSE_MS` in engine.ts) before it can feed Fluency or a personal-best comparison — the clock measures recall speed, not how long the Learner was away from the phone before answering.
 _Avoid_: Try, guess, answer (as a noun for the event)
+
+**Retry**:
+The single extra, unaided go at a Fact the Learner gets straight after answering it wrong (docs/adr/0007) — the same Fact, its answer still hidden, so the second go is recall rather than copying. Not an Attempt: the Fact was already measured by the wrong Attempt, and nothing about a Retry feeds Fluency, Accuracy, or the Streak. There is exactly one per wrong Attempt — a wrong Retry gives the answer up and hands over to the retype.
+_Avoid_: Second chance, do-over, extra attempt
 
 **Active range**:
 The current subset of Facts (e.g. 1–5 × 1–5) the Learner is being quizzed on. Expands to the next size once enough of the range is Mastered.

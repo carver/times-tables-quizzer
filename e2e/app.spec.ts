@@ -153,7 +153,33 @@ test.describe("answering", () => {
     await expect(page.locator("#typed-answer")).toHaveText("1");
   });
 
-  test("a wrong answer shows the correct one and requires retyping it, without recording an Attempt", async ({
+  test("a first wrong answer earns a Retry with the answer still hidden", async ({ page }) => {
+    // The point of the Retry is recall: being shown "4 × 4 = 16"
+    // immediately turns the next keystrokes into copying. The Fact stays
+    // up unanswered instead, and only a second miss gives the answer up.
+    await seed(page, { lastMapShownDay: TODAY(), fact: { a: 4, b: 4 } });
+    await page.goto("/");
+
+    const correct = await promptedAnswer(page);
+    await answerWithKeypad(page, correct + 1);
+
+    await expect(page.locator("#overlay")).toContainText("try again");
+    await expect(page.locator("#prompt")).toHaveText("4 × 4 = ?");
+    const afterWrong = await readSave(page);
+
+    // Getting it right on the second go moves straight on to the next
+    // Fact - no answer to copy out - and, being practice rather than a
+    // measured Attempt, leaves Fluency, Accuracy and the Streak alone.
+    await answerWithKeypad(page, correct);
+    await expect(page.locator("#prompt")).toContainText("?");
+
+    const afterRetry = await readSave(page);
+    expect(afterRetry.fluency).toEqual(afterWrong.fluency);
+    expect(afterRetry.accuracy).toEqual(afterWrong.accuracy);
+    expect(afterRetry.streak).toEqual(afterWrong.streak);
+  });
+
+  test("a second wrong answer shows the correct one and requires retyping it, without recording an Attempt", async ({
     page,
   }) => {
     // The retype is practice, not measurement (CONTEXT.md's Attempt
@@ -164,6 +190,9 @@ test.describe("answering", () => {
 
     const correct = await promptedAnswer(page);
     await answerWithKeypad(page, correct + 1);
+    // Still hidden after one miss - only the second one gives it up.
+    await expect(page.locator("#prompt")).toHaveText("4 × 4 = ?");
+    await answerWithKeypad(page, correct + 2);
 
     // The prompt now shows the answer outright, and Enter alone won't move on.
     await expect(page.locator("#prompt")).toContainText(`= ${correct}`);
@@ -577,14 +606,23 @@ test.describe("the idle check", () => {
     expect(recorded).toBeLessThan(3_000);
   });
 
-  test("never appears while retyping a correction, which does not feed Fluency", async ({ page }) => {
+  test("never appears during a Retry or a correction retype, neither of which feeds Fluency", async ({ page }) => {
     await page.clock.install();
-    await seed(page, { lastMapShownDay: TODAY() });
+    await seed(page, { lastMapShownDay: TODAY(), fact: { a: 4, b: 4 } });
     await page.goto("/");
 
     await answerWithKeypad(page, 999999); // never a real product in any Active range
     await expect(page.locator("#overlay")).toHaveAttribute("data-visible", "true");
 
+    // Mid-Retry: thinking time here is deliberately untimed (adr/0007),
+    // so a long think must not be mistaken for a walk-away.
+    await expect(page.locator("#prompt")).toHaveText("4 × 4 = ?");
+    await page.clock.fastForward("00:31");
+    await expect(page.locator("#idle-confirm")).toBeHidden();
+
+    // And again once the Retry is spent and the answer is on screen.
+    await answerWithKeypad(page, 999999);
+    await expect(page.locator("#prompt")).toContainText("= 16");
     await page.clock.fastForward("00:31");
     await expect(page.locator("#idle-confirm")).toBeHidden();
   });

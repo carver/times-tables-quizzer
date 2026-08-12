@@ -47,7 +47,8 @@ function dayCount(n: number): string {
 // Fact is already live underneath it), and the wrong-Attempt overlay is a
 // brief "not quite" flash, not the mechanism that shows the correct
 // answer: the prompt shows that continuously in "correcting" mode,
-// underneath, for as long as the retype takes. Takeover Celebrations
+// underneath, for as long as the retype takes (and withholds it
+// entirely during the Retry that now comes first - docs/adr/0007). Takeover Celebrations
 // (below) deliberately have no such timer - see dismissTakeover.
 // Shortened from 1200ms once the Celebration overlay became opaque: it
 // now genuinely hides the next Fact while it's up, so its duration is
@@ -939,6 +940,13 @@ function renderQuiz() {
     // Fluency (CONTEXT.md), so there's no idle-check to arm.
     promptEl.textContent = `${quizState.wrongFact.a} × ${quizState.wrongFact.b} = ${quizState.correctAnswer}`;
     disarmIdleCheck();
+  } else if (quizState.mode === "retrying") {
+    // Same Fact, still asking - the answer is deliberately withheld for
+    // one more try. No idle-check either: a Retry is untimed by
+    // design (it's the thinking time the reveal used to cut short), so
+    // there's no response clock for a walk-away to spoil.
+    promptEl.textContent = `${quizState.wrongFact.a} × ${quizState.wrongFact.b} = ?`;
+    disarmIdleCheck();
   } else {
     promptEl.textContent = `${quizState.engine.fact.a} × ${quizState.engine.fact.b} = ?`;
     updateIdleCheck();
@@ -1187,9 +1195,28 @@ function handleEnter() {
       // by an incorrect outcome (engine.ts only pushes correctness-only /
       // personal-best on the correct path), so this never competes with
       // playInlineCelebrations' overlay.
-      showOverlay("Not quite — type the answer to continue", "none", WRONG_ANSWER_FLASH_MS);
+      //
+      // The answer isn't given away here: the Fact stays up for a second
+      // try (screen.ts's "retrying"), so the flash asks for one rather
+      // than pointing at an answer that isn't on screen.
+      showOverlay("Not quite — try again", "none", WRONG_ANSWER_FLASH_MS);
       takeoverQueue = enqueueTakeovers(takeoverQueue, outcome.celebrations);
       syncTakeoverDisplay();
+      break;
+    case "retry-incorrect":
+      // Second miss: the answer comes out now. No engine change to
+      // persist and no Attempt recorded - the Fact was measured once, on
+      // the first Enter - so this is purely the handover into retyping.
+      playSound("wrong");
+      showOverlay("Not quite — type the answer to continue", "none", WRONG_ANSWER_FLASH_MS);
+      break;
+    case "retry-correct":
+      // Recalled without being shown the answer. Worth the correct sound
+      // and a word of encouragement - but not a Celebration: the engine
+      // recorded a wrong Attempt for this Fact and nothing here changes
+      // that, so there's nothing to persist or push either.
+      playSound("correct");
+      showOverlay("Got it — that's the one!", "none", CELEBRATION_DISPLAY_MS);
       break;
     case "correction-dismissed":
       hideOverlay();
