@@ -165,6 +165,21 @@ const WEIGHT_EXPONENT = 2;
 // the weighted-random design exists to avoid.
 const SAME_DAY_MASTERED_DAMPER = 0.25;
 
+// The minimum share of drawn Facts that must be ones the Learner has not
+// Mastered yet - the Facts standing between them and the next Active
+// range expansion (or, at the top range, between them and mastering the
+// whole grid). See ADR 0008.
+//
+// This is the primary tuning knob for "practice isn't spending enough
+// time on what I still need". It is a *floor*, never a cap: when the
+// natural weighting already sends more than this share to unmastered
+// Facts (right after an expansion, say, when the new row and column are
+// all unattempted), nothing is rescaled. 0 disables the floor entirely
+// and restores pure ADR 0005 weighting; 1 would draw nothing but
+// unmastered Facts, which is deliberately not the default - see the ADR
+// on why mastered Facts must stay in the pool.
+export const UNMASTERED_SHARE_FLOOR = 0.5;
+
 // The response-time bar this Fact is held to: the fixed automaticity
 // target (the same recall bar for every Fact, ADR 0001) plus its own
 // typing allowance. Shared by the progression check and by selection
@@ -198,6 +213,43 @@ export function computeWeight(
 
   const remainingBoost = state.boosted[key] ?? 0;
   return remainingBoost > 0 ? weight * BOOST_WEIGHT_MULTIPLIER : weight;
+}
+
+// The weights a draw actually runs on: every candidate's computeWeight,
+// with the not-yet-Mastered ones scaled up together if they'd otherwise
+// account for less than UNMASTERED_SHARE_FLOOR of the total (ADR 0008).
+//
+// Scaling the group as a whole - rather than picking a Fact from a
+// reserved pool - is what keeps every other selection rule intact: the
+// slowest unmastered Fact is still the likeliest of them, boosts and the
+// same-day damper still apply, and mastered Facts keep the long tail
+// that ADR 0005 deliberately refused to cut off. It also costs no extra
+// draw from the random source, so a caller's single `random()` still
+// maps to a single Fact.
+export function selectionWeights(
+  facts: Fact[],
+  state: Pick<EngineState, "fluency" | "boosted" | "needsRedemption">,
+  now: number,
+): number[] {
+  const weights = facts.map((fact) => computeWeight(fact, state, now));
+  const unmastered = facts.map((fact) => !isMastered(fact, state, now));
+
+  const unmasteredWeight = weights.reduce((sum, weight, i) => (unmastered[i] ? sum + weight : sum), 0);
+  const masteredWeight = weights.reduce((sum, weight, i) => (unmastered[i] ? sum : sum + weight), 0);
+
+  // Nothing to lift (every candidate is already Mastered), nothing to
+  // lift *against* (they all still need mastering, so they hold 100% of
+  // the weight anyway), or the natural weighting already clears the
+  // floor. The last case is the common one straight after an expansion.
+  const total = unmasteredWeight + masteredWeight;
+  if (unmasteredWeight === 0 || masteredWeight === 0 || total === 0) return weights;
+  if (unmasteredWeight / total >= UNMASTERED_SHARE_FLOOR) return weights;
+  if (UNMASTERED_SHARE_FLOOR >= 1) return weights.map((weight, i) => (unmastered[i] ? weight : 0));
+
+  // Scale the unmastered group so it holds exactly the floor's share:
+  // solving u' / (u' + m) = F for u' gives u' = m * F / (1 - F).
+  const scale = ((masteredWeight * UNMASTERED_SHARE_FLOOR) / (1 - UNMASTERED_SHARE_FLOOR)) / unmasteredWeight;
+  return weights.map((weight, i) => (unmastered[i] ? weight * scale : weight));
 }
 
 // The fixed automaticity bar for progression (ADR 0001) - the same for
@@ -375,6 +427,11 @@ export type Dependencies = {
   now: () => number;
 };
 
+// Draws one Fact at random, weighted by selectionWeights - so the floor
+// on still-to-master Facts (ADR 0008) is measured over the candidates
+// that can actually be drawn, after the exclusion below, not over the
+// whole Active range.
+//
 // Hard-excludes `previousKey` (the Fact just answered, if any) from the
 // draw whenever another Fact is available, so the same problem can never
 // appear twice in a row. Weighting alone doesn't guarantee this: a Fact
@@ -394,7 +451,7 @@ function pickFact(
   const facts =
     previousKey !== undefined && allFacts.length > 1 ? allFacts.filter((fact) => factKey(fact) !== previousKey) : allFacts;
   const now = deps.now();
-  const weights = facts.map((fact) => computeWeight(fact, state, now));
+  const weights = selectionWeights(facts, state, now);
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
 
   let remainingWeight = deps.random() * totalWeight;

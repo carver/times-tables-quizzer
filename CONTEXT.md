@@ -37,7 +37,7 @@ A per-Fact, recency-weighted share of Attempts that were correct. Unlike Fluency
 _Avoid_: Correctness rate, success rate, score
 
 **Mastered**:
-A Fact whose Fluency is currently under the target speed *and* which has been answered correctly since its most recent wrong Attempt. The Active range expands once enough of its Facts are Mastered.
+A Fact whose Fluency is currently under the target speed *and* which has been answered correctly since its most recent wrong Attempt. The Active range expands once enough of its Facts are Mastered. The Facts *not* yet Mastered are what stands between the Learner and the next expansion (or, at the top range, between them and the whole grid), so selection guarantees them a floor share of the Facts drawn (docs/adr/0008) on top of the ordinary weighting.
 _Avoid_: Learned, known
 
 **Celebration**:

@@ -7,13 +7,16 @@ import {
   factTargetMs,
   isMastered,
   listFacts,
+  MAX_ACTIVE_RANGE_SIZE,
   NEW_STREAK,
   nextActiveRange,
+  selectionWeights,
   submitAttempt,
   MAX_RESPONSE_MS,
   TARGET_SPEED_MS,
   typingAllowanceMs,
   UNATTEMPTED_WEIGHT_MS,
+  UNMASTERED_SHARE_FLOOR,
   type EngineState,
 } from "./engine";
 import { stateWithMasteredCount } from "./testHelpers";
@@ -282,6 +285,98 @@ describe("computeWeight", () => {
   });
 });
 
+describe("selectionWeights", () => {
+  // A range the Learner has nearly conquered: the first `unmasteredCount`
+  // Facts still sit past their target, the rest comfortably inside it.
+  // Everything was last practiced yesterday, so the same-day damper stays
+  // out of the share arithmetic and these are ADR 0005's plain squared
+  // ratios. This is that ADR's scenario one step further along - the
+  // handful of stubborn Facts are outvoted by the mastered headcount.
+  function nearlyMastered(range: { size: number }, unmasteredCount: number, unmasteredMs = 3_000) {
+    const fluency: EngineState["fluency"] = {};
+    listFacts(range).forEach((fact, i) => {
+      fluency[factKey(fact)] = {
+        averageResponseMs: i < unmasteredCount ? unmasteredMs : 1_800,
+        lastAttemptAt: -DAY_MS,
+      };
+    });
+    return { fluency, boosted: {}, needsRedemption: {} };
+  }
+
+  const total = (weights: number[]) => weights.reduce((sum, weight) => sum + weight, 0);
+
+  // The share of the total weight held by the first `count` Facts, which
+  // nearlyMastered makes the still-to-master ones.
+  const unmasteredShare = (weights: number[], count: number) => total(weights.slice(0, count)) / total(weights);
+
+  it("lifts the still-to-master Facts to the floor's share when weighting alone falls short", () => {
+    const range = { size: 5 };
+    const facts = listFacts(range);
+    const state = nearlyMastered(range, 2);
+
+    // Precondition: unaided, the 23 mastered Facts crowd the 2 stubborn
+    // ones out - which is the complaint this floor exists to answer.
+    expect(unmasteredShare(facts.map((fact) => computeWeight(fact, state, 0)), 2)).toBeLessThan(UNMASTERED_SHARE_FLOOR);
+
+    expect(unmasteredShare(selectionWeights(facts, state, 0), 2)).toBeCloseTo(UNMASTERED_SHARE_FLOOR, 10);
+  });
+
+  it("applies the same floor at the top Active range, where there is no expansion left to earn", () => {
+    // At 12 x 12 the Facts still to master are all that's left to work
+    // on, and 6 stragglers out of 144 are exactly the ones the headcount
+    // would otherwise bury.
+    const range = { size: MAX_ACTIVE_RANGE_SIZE };
+    const facts = listFacts(range);
+    const state = nearlyMastered(range, 6);
+
+    expect(unmasteredShare(selectionWeights(facts, state, 0), 6)).toBeCloseTo(UNMASTERED_SHARE_FLOOR, 10);
+  });
+
+  it("leaves weighting untouched when the still-to-master Facts already clear the floor", () => {
+    // The floor is a floor, not a quota - right after an expansion the
+    // new row and column are unattempted and already dominate the draw,
+    // and nothing should pull them back down to it.
+    const range = { size: 5 };
+    const facts = listFacts(range);
+    const state = nearlyMastered(range, 20);
+
+    expect(selectionWeights(facts, state, 0)).toEqual(facts.map((fact) => computeWeight(fact, state, 0)));
+  });
+
+  it("leaves weighting untouched once every Fact in the range is Mastered", () => {
+    const range = { size: 5 };
+    const facts = listFacts(range);
+    const state = nearlyMastered(range, 0);
+
+    expect(selectionWeights(facts, state, 0)).toEqual(facts.map((fact) => computeWeight(fact, state, 0)));
+  });
+
+  it("scales the still-to-master Facts as a group, keeping the slowest of them the likeliest", () => {
+    // Lifting the group must not flatten it: within the still-to-master
+    // Facts, ADR 0005's ordering still decides which comes up most.
+    const range = { size: 5 };
+    const facts = listFacts(range);
+    const state = nearlyMastered(range, 2);
+    state.fluency[factKey(facts[0])].averageResponseMs = 9_000;
+
+    const weights = selectionWeights(facts, state, 0);
+    const natural = facts.map((fact) => computeWeight(fact, state, 0));
+
+    expect(weights[0]).toBeGreaterThan(weights[1]);
+    expect(weights[0] / weights[1]).toBeCloseTo(natural[0] / natural[1], 10);
+  });
+
+  it("keeps Mastered Facts in the pool rather than reserving the draw", () => {
+    // ADR 0005 refused to exclude fluent Facts and this doesn't reopen
+    // that: their weight is scaled down relative to the group, never to
+    // zero, so nothing gets quietly forgotten.
+    const range = { size: 5 };
+    const facts = listFacts(range);
+
+    expect(selectionWeights(facts, nearlyMastered(range, 2), 0).every((weight) => weight > 0)).toBe(true);
+  });
+});
+
 describe("createInitialState", () => {
   it("picks the current Fact from the Active range using the injected random source", () => {
     const state = createInitialState({ size: 2 }, deps({ random: () => 0 }));
@@ -356,6 +451,48 @@ describe("submitAttempt", () => {
       state = result.state;
       expect(factKey(state.fact)).not.toBe(previous);
     }
+  });
+
+  it("draws at least the floor's share of still-to-master Facts once a range is nearly conquered", () => {
+    // End-to-end version of the selectionWeights unit tests: a 5 x 5
+    // range with 22 Facts inside the target and 3 still past it, swept
+    // across the whole random source so the fraction of draws landing on
+    // each Fact converges on its share of the weight. Answering wrong
+    // keeps the range from expanding mid-test (21/25 Mastered) and the
+    // just-answered Fact is hard-excluded from the draw either way.
+    const range = { size: 5 };
+    const facts = listFacts(range);
+    const unmastered = new Set(facts.slice(0, 3).map(factKey));
+    const fluency: EngineState["fluency"] = {};
+    facts.forEach((fact, i) => {
+      fluency[factKey(fact)] = { averageResponseMs: i < 3 ? 3_000 : 1_800, lastAttemptAt: -DAY_MS };
+    });
+    const state: EngineState = {
+      activeRange: range,
+      fact: facts[facts.length - 1],
+      fluency,
+      accuracy: {},
+      boosted: {},
+      needsRedemption: {},
+      rangeHistory: { [range.size]: 0 },
+      acknowledgedRangeSize: range.size,
+      streak: NEW_STREAK,
+      practiceDayCount: 0,
+    };
+
+    const draws = 1_000;
+    let onUnmastered = 0;
+    for (let i = 0; i < draws; i++) {
+      const result = submitAttempt(
+        state,
+        { type: "attemptSubmitted", answer: -1, responseTimeMs: 1_000 },
+        deps({ random: () => (i + 0.5) / draws }),
+      );
+      expect(result.state.activeRange).toEqual(range);
+      if (unmastered.has(factKey(result.state.fact))) onUnmastered++;
+    }
+
+    expect(onUnmastered / draws).toBeGreaterThanOrEqual(UNMASTERED_SHARE_FLOOR - 0.01);
   });
 
   it("falls back to redrawing the same Fact when the Active range has only one", () => {
