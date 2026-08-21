@@ -397,6 +397,19 @@ let displayedTakeover: Celebration | undefined;
 // load rather than surviving across days.
 let progressHighWaterMark: ProgressHighWaterMark | null = null;
 
+// The one way to hand the app a *different Learner's* EngineState
+// (switching Profiles, starting a new one, joining one). The high-water
+// mark above is per-Learner - it's keyed by Active range size only, so
+// left alone it would clamp the next Learner's "N to go" against the
+// previous Learner's best masteredCount whenever both sit at the same
+// range size (ticket #17). Same-Profile updates arriving from another
+// device (applyPendingRemoteUpdate) deliberately do NOT go through here:
+// that's still the same Learner, so their mark should carry on.
+function adoptLearnerState(engine: EngineState) {
+  quizState = createInitialScreen(engine, deps);
+  progressHighWaterMark = null;
+}
+
 function persist() {
   saveState({ engine: quizState.engine, lastMapShownDay, muted, remindersEnabled });
 
@@ -608,7 +621,7 @@ async function switchToProfile(profileId: string): Promise<void> {
   const data = await mod.fetchProfile(profileId);
   if (data) updatePairedProfileLabel(profileId, labelFromDocument(data));
   const engine = data ? parseEngineState(data) : null;
-  quizState = createInitialScreen(engine ?? createInitialState(INITIAL_ACTIVE_RANGE, deps), deps);
+  adoptLearnerState(engine ?? createInitialState(INITIAL_ACTIVE_RANGE, deps));
   persist();
   startSyncing(profileId);
   renderSyncPanel();
@@ -638,7 +651,7 @@ async function startNewProfile(rawLabel: string): Promise<void> {
   }
 
   addPairedProfile({ profileId, label });
-  quizState = createInitialScreen(freshState, deps);
+  adoptLearnerState(freshState);
   persist();
   startSyncing(profileId);
   renderSyncPanel();
@@ -675,7 +688,7 @@ async function startSharing(rawLabel: string): Promise<void> {
 
 function completeJoin(profileId: string, remoteEngine: EngineState, label: string) {
   addPairedProfile({ profileId, label });
-  quizState = createInitialScreen(remoteEngine, deps);
+  adoptLearnerState(remoteEngine);
   persist();
   startSyncing(profileId);
   joinCodeInputEl.value = "";

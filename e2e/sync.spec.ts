@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { answerWithKeypad, promptedAnswer } from "./helpers";
+import { answerWithKeypad, promptedAnswer, seed } from "./helpers";
 
 // docs/adr/0006's device-local pairing record and synced save file - see
 // src/profilePairing.ts and src/persistence.ts respectively. Read
@@ -261,6 +261,35 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     const restoredState = await readEngineState(page);
     expect(restoredState.streak.count).toBe(1);
     expect(restoredState.fact).toEqual(originalState.fact);
+  });
+
+  test("switching to another Profile at the same Active range size restarts the 'N to go' high-water mark (#17)", async ({
+    page,
+  }) => {
+    // 2 of the 2x2 grid's 4 Facts Mastered: ceil(0.9 * 4) = 4 needed, so
+    // "2 to go". A fresh Profile is also size 2, which is exactly the
+    // collision the session high-water mark (keyed by range size only)
+    // used to get wrong.
+    await seed(page, { activeRangeSize: 2, masteredCount: 2 });
+    await page.goto("/#map");
+    await expect(page.locator("#progress-readout")).toHaveText("2 to go");
+
+    await page.click("#sync-button");
+    await startSharing(page, "Ada");
+    await expect(page.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
+
+    await page.click("#new-profile-button");
+    await page.fill("#new-profile-name-input", "Sam");
+    await page.click("#new-profile-confirm-button");
+    await expect(page.locator("#sync-button")).toContainText("Sam", { timeout: SYNC_TIMEOUT_MS });
+
+    // Sam has Mastered nothing - all 4 are still to go, not Ada's 2.
+    await expect(page.locator("#progress-readout")).toHaveText("4 to go");
+
+    // And hopping back restores Ada's own count rather than Sam's.
+    await page.click('#profile-switcher button:has-text("Ada")');
+    await expect(page.locator("#sync-button")).toContainText("Ada", { timeout: SYNC_TIMEOUT_MS });
+    await expect(page.locator("#progress-readout")).toHaveText("2 to go");
   });
 
   test("Stop syncing detaches this device but leaves its local progress untouched", async ({ page }) => {
