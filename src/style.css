@@ -4,10 +4,10 @@
   --accent: #2563eb;
 
   /* Statistics screen (ticket #12 / ADR 0004): two single-hue ramps,
-     five steps each, darker = better - Accuracy on orange (--acc-1..5),
+     five steps each, darker = better. Accuracy on orange (--acc-1..5),
      Fluency on blue (--fluency-1..5). `color-scheme: light dark` above
      leaves the actual surface up to the browser/OS, which the palette
-     validator can't check against - so the grids render on an explicit,
+     validator can't check against, so the grids render on an explicit,
      pinned surface (--stats-surface) instead, with these exact ramp
      steps validated (dataviz skill's validate_palette.js --ordinal)
      against that exact surface in both modes. Light values below; the
@@ -25,7 +25,7 @@
   --fluency-3: #306ebe;
   --fluency-4: #044b97;
   --fluency-5: #00296c;
-  /* "Attempted, never once correct" (ADR 0004) - deliberately NOT part
+  /* "Attempted, never once correct" (ADR 0004). Deliberately NOT part
      of either ramp, and validated (all-pairs CVD + normal-vision ΔE)
      against both ramps' weakest step so it never reads as "just another
      bucket." Soft amber/gold rather than red: the ADR is explicit that
@@ -35,8 +35,8 @@
 
 /* Dark mode's ramps flip which end reads as "weak": a literal `darker
    means better` on a dark surface would make the BEST cells nearly
-   invisible (near-black on near-black), so - per the dataviz skill's
-   sequential-ramp guidance - the weak end sits close to the dark
+   invisible (near-black on near-black), so, per the dataviz skill's
+   sequential-ramp guidance, the weak end sits close to the dark
    surface and the strong end is the brightest, most saturated step.
    Each step here was independently chosen and run through
    validate_palette.js --ordinal against --stats-surface below; it is
@@ -65,7 +65,7 @@ body {
   margin: 0;
 }
 
-/* Shared shell for all three screens (map, quiz, stats) - hash routing
+/* Shared shell for all three screens (map, quiz, stats). Hash routing
    (route.ts / main.ts) toggles data-active rather than swapping DOM
    trees, so exactly one of these is display:flex at a time. */
 .screen {
@@ -92,13 +92,13 @@ body {
   opacity: 0.7;
   margin: 0;
   /* Purely informational text, but its box spans the full header width
-     (it's a block-level <p>) - without this, it sits on top of the
+     (it's a block-level <p>). Without this, it sits on top of the
      absolutely-positioned .map-link in the same header and steals the
      corner's clicks/taps despite there being nothing to see there. */
   pointer-events: none;
 }
 
-/* The quiz screen's only way back to the Progress map - small and quiet
+/* The quiz screen's only way back to the Progress map, small and quiet
    on purpose (ticket #11: nothing here should compete with practicing,
    unlike the map's deliberately larger Practice button). */
 .map-link {
@@ -117,7 +117,7 @@ body {
   opacity: 0.6;
 }
 
-/* Zone 2: the large center block - the Fact, with the typed answer
+/* Zone 2: the large center block, the Fact with the typed answer
    directly beneath it. Positioned so the feedback overlay can cover it
    without shifting anything above or below. */
 .center {
@@ -148,10 +148,10 @@ body {
 }
 
 /* The overlay renders on top of the center block instead of appearing
-   as its own line - a line that appears and disappears shifts
+   as its own line. A line that appears and disappears shifts
    everything above it, and layout shift during fast answering causes
    mis-taps. Used both for the Celebration after a correct Attempt and
-   for the brief "not quite" flash after a wrong one - never for
+   for the brief "not quite" flash after a wrong one, never for
    anything the Learner needs to keep reading, since it sits on top of
    the prompt and typed answer beneath it. */
 .overlay {
@@ -176,18 +176,18 @@ body {
 
 /* A Celebration's overlay is OPAQUE, unlike the wrong-Attempt flash
    above it. The translucent wash let the next Fact be read straight
-   through "Correct!" - and washed out the digits being typed at the same
+   through "Correct!", and washed out the digits being typed at the same
    time, so answering early looked like it wasn't registering. The
    wrong-Attempt flash stays translucent on purpose: the prompt beneath
    it is showing the correct answer the Learner is meant to read and
    copy. Any keypress dismisses this immediately (main.ts's handleDigit),
-   so it never costs a fast Learner time - it's a ceiling, not a wait. */
+   so it never costs a fast Learner time. It's a ceiling, not a wait. */
 .overlay[data-celebration="correctness-only"],
 .overlay[data-celebration="personal-best"] {
   background: Canvas;
 }
 
-/* Ticket #13's "Correct" row: the answer flashes green - inline, quick,
+/* Ticket #13's "Correct" row: the answer flashes green. Inline, quick,
    never blocking the next Attempt (only range-expansion and Milestone
    take over the screen; see .takeover below). */
 .overlay[data-celebration="correctness-only"] {
@@ -198,14 +198,14 @@ body {
   color: #d97706;
 }
 
-/* "Inline sparkle on the answer" (ticket #13) - a static glyph, not an
+/* "Inline sparkle on the answer" (ticket #13): a static glyph, not an
    animation, so it needs nothing extra under prefers-reduced-motion. */
 .overlay[data-celebration="personal-best"]::after {
   content: " ✨";
 }
 
 /* Zone 3: the keypad, anchored to the bottom of the viewport and taking
-   roughly the bottom 45% - the thumb zone on a phone, which is the
+   roughly the bottom 45%, the thumb zone on a phone, which is the
    layout this keypad is designed for. */
 .keypad {
   flex: 0 0 45%;
@@ -228,11 +228,11 @@ body {
   background: Canvas;
   color: CanvasText;
   /* Without this, mobile browsers spend time disambiguating each tap as
-     a possible scroll/zoom gesture before committing to a click - on a
+     a possible scroll/zoom gesture before committing to a click. On a
      fast, light tap that disambiguation is exactly what drops the tap. */
   touch-action: manipulation;
   /* Instant on press (overridden by :active below), eased back out on
-     release - so a press that's too quick to see while held still
+     release, so a press that's too quick to see while held still
      leaves a brief, fading trace of having registered. */
   transition: background-color 300ms ease-out;
 }
@@ -242,7 +242,7 @@ body {
   transition: background-color 0s;
 }
 
-/* Enter is visually heavier than the digit keys - it's the only way to
+/* Enter is visually heavier than the digit keys. It's the only way to
    submit (no auto-submit on digit count), so it needs to read as the
    deliberate, weighted action it is. */
 .key-enter {
@@ -261,7 +261,7 @@ body {
   font-weight: 600;
 }
 
-/* Progress map - the app's home screen (CONTEXT.md). One 12x12 grid
+/* Progress map, the app's home screen (CONTEXT.md). One 12x12 grid
    outline with the conquered Active-range corner filled: deliberately
    the same grid shape ADR 0004 settles for the statistics pages, so the
    Learner learns it once. */
@@ -279,7 +279,7 @@ body {
   width: 100%;
 }
 
-/* Ticket #13: mute lives here and ONLY here - never on the quiz screen,
+/* Ticket #13: mute lives here and ONLY here, never on the quiz screen,
    where a fast-tapping thumb would hit it by accident. Quiet by design,
    same reasoning as .map-link on the quiz header: it's a utility control,
    not something competing with Practice for attention. */
@@ -300,7 +300,7 @@ body {
   opacity: 0.9;
 }
 
-/* Positioning context for .progress-readout's frontier placement below -
+/* Positioning context for .progress-readout's frontier placement below,
    sized to match .progress-grid exactly so percentage offsets line up
    with actual grid boundaries. */
 .progress-grid-wrap {
@@ -330,7 +330,7 @@ body {
 
 /* The progress-to-expansion readout: a count remaining ("3 to go"), not
    a percentage. Once the grid is full it becomes a maintenance readout
-   ("142 of 144 sharp") instead - styled a touch quieter since it's
+   ("142 of 144 sharp") instead, styled a touch quieter since it's
    informational rather than motivating toward a next unlock, and laid
    out in normal flow below the grid since there's no frontier left to
    point at. */
@@ -346,7 +346,7 @@ body {
 }
 
 /* "The current frontier row/column is where the progress-to-expansion
-   indicator lives" (ticket #11) - while there's still a frontier to
+   indicator lives" (ticket #11). While there's still a frontier to
    expand toward, the readout is pinned to the boundary corner where the
    filled square ends and the next row/column begins (main.ts sets
    left/top as a percentage of .progress-grid-wrap), rather than sitting
@@ -378,7 +378,7 @@ body {
   background: color-mix(in srgb, var(--accent) 80%, black);
 }
 
-/* Quiet on purpose - a menu item, not a second call to action next to
+/* Quiet on purpose: a menu item, not a second call to action next to
    Practice. */
 .stats-link {
   font-size: 0.95rem;
@@ -387,7 +387,7 @@ body {
   color: CanvasText;
 }
 
-/* Install/reminder controls: same quiet weight as .stats-link - utility
+/* Install/reminder controls: same quiet weight as .stats-link. Utility
    settings, not competing with Practice for attention. */
 .map-settings {
   display: flex;
@@ -417,7 +417,7 @@ body {
   margin: 0;
 }
 
-/* Cross-device sync panel (docs/adr/0006) - a small bordered card rather
+/* Cross-device sync panel (docs/adr/0006): a small bordered card rather
    than a full takeover, since it's an occasional settings action, not
    something that needs to interrupt practice the way a Celebration does. */
 .sync-panel {
@@ -447,7 +447,7 @@ body {
   background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
-/* Pairs closely-related actions (Copy link / Show QR code - both just
+/* Pairs closely-related actions (Copy link / Show QR code, both just
    different ways to hand the same link to another device) side by side
    instead of each taking its own full-width row. */
 .sync-action-row {
@@ -459,7 +459,7 @@ body {
   flex: 1;
 }
 
-/* "Stop syncing" - a real, reversible action (re-pairing is one link
+/* "Stop syncing" is a real, reversible action (re-pairing is one link
    away), but still not something to visually compete with the actions
    above it. */
 .sync-action--quiet {
@@ -490,11 +490,11 @@ body {
   gap: 0.35rem;
 }
 
-/* Fixed white background regardless of light/dark mode - a QR code's
+/* Fixed white background regardless of light/dark mode. A QR code's
    scan reliability depends on real light/dark contrast between its
    modules and their background, which a dark-mode surface would erode
    (qrcode-generator draws modules in `currentColor`/black, assuming a
-   light backdrop). Padding is the code's quiet zone - most scanners
+   light backdrop). Padding is the code's quiet zone; most scanners
    need clear space around the pattern to lock onto it. */
 .qr-code-wrap {
   display: flex;
@@ -580,7 +580,7 @@ body {
   color: CanvasText;
 }
 
-/* Statistics screen (ticket #12) - the pinned surface (--stats-surface,
+/* Statistics screen (ticket #12). The pinned surface (--stats-surface,
    defined above) is what the ramp/amber steps were actually validated
    against, so it's set here rather than left to `color-scheme`'s
    browser default. */
@@ -603,7 +603,7 @@ body {
 }
 
 /* Scrolls independently of the header so "Practiced: N days / Streak"
-   stays visible while the grids - the tallest content on the page -
+   stays visible while the grids, the tallest content on the page,
    scroll past it on a short viewport. */
 .stats-body {
   flex: 1 1 auto;
@@ -644,7 +644,7 @@ body {
 }
 
 /* Tappable/focusable, matching the grid cells' own tap-for-detail
-   pattern (buildStatsGrid) - reset to look like the plain text label the
+   pattern (buildStatsGrid). Reset to look like the plain text label the
    legend used to be, not a button, since the swatch already carries the
    visual weight. */
 .legend-item {
@@ -752,7 +752,7 @@ body {
   transform: scale(1.15);
 }
 
-/* Outside the Active range - always shown (ADR 0004: "seeing the
+/* Outside the Active range. Always shown (ADR 0004: "seeing the
    unconquered territory is motivating"), neutral and inert rather than
    colored, since nothing has been or could yet be attempted there. */
 .stats-cell--locked {
@@ -760,7 +760,7 @@ body {
   cursor: default;
 }
 
-/* Never attempted: surface plus a hairline ring (ADR 0004) - distinct
+/* Never attempted: surface plus a hairline ring (ADR 0004), distinct
    from both a locked cell (no ring) and the ramp's own lightest step
    (an actual fill color, however pale). */
 .stats-cell--unattempted {
@@ -768,7 +768,7 @@ body {
   border: 1px solid var(--stats-ring);
 }
 
-/* Attempted, never once correct - soft amber on BOTH grids (ADR 0004),
+/* Attempted, never once correct: soft amber on BOTH grids (ADR 0004),
    the page's most actionable signal, so it must never be reachable by
    the ramp's own coloring logic. */
 .stats-cell--never-correct {
@@ -776,7 +776,7 @@ body {
 }
 
 /* 1-2 Attempts: a real ramp color (set inline, per-cell, in main.ts)
-   PLUS this dashed ring marking it provisional - box-sizing: border-box
+   PLUS this dashed ring marking it provisional. box-sizing: border-box
    above means the ring insets the fill rather than growing the cell. */
 .stats-cell--provisional {
   border: 2px dashed color-mix(in srgb, CanvasText 55%, transparent);
@@ -805,7 +805,7 @@ body {
 
 /* Ticket #13's takeover: fills the screen and waits for a tap, for
    range-expansion and Milestone Celebrations (CONTEXT.md's Celebration
-   entry). Fixed and outside the .screen/[data-active] system on purpose -
+   entry). Fixed and outside the .screen/[data-active] system on purpose:
    it covers whichever screen was showing (always the quiz screen in
    practice) rather than being scoped to one, since main.ts blocks quiz
    input for as long as this is up regardless of route. */
@@ -879,7 +879,7 @@ body[data-idle-confirm="true"] .keypad {
 }
 
 /* Milestone gets no grid (only range-expansion shows the new row/column
-   filling in) - main.ts never populates #takeover-grid for it, and this
+   filling in). main.ts never populates #takeover-grid for it, and this
    just keeps the empty wrapper from reserving blank space. */
 .takeover[data-kind="milestone"] .takeover-grid-wrap {
   display: none;
@@ -931,8 +931,8 @@ body[data-idle-confirm="true"] .keypad {
 
 /* prefers-reduced-motion (ticket #13, explicit requirement): the
    takeover itself still appears/disappears (that's a visibility change,
-   not motion), but the entrance scale and the staggered grid reveal -
-   the two actual animations here - are removed. The new cells still end
+   not motion), but the entrance scale and the staggered grid reveal,
+   the two actual animations here, are removed. The new cells still end
    up filled, just without the stagger. */
 @media (prefers-reduced-motion: reduce) {
   .takeover-content {
@@ -943,7 +943,7 @@ body[data-idle-confirm="true"] .keypad {
   }
 }
 
-/* The reset screen (route.ts's RESET_ROUTE) - unlinked from the rest of
+/* The reset screen (route.ts's RESET_ROUTE), unlinked from the rest of
    the app and reachable only by typing #/reset. Styled plainly and
    deliberately unenticing: it is a handover tool, not a feature. */
 .reset-screen {
@@ -984,7 +984,7 @@ body[data-idle-confirm="true"] .keypad {
 }
 
 /* A newly deployed version has activated in the background (main.ts's
-   service-worker update check) - pinned to the top so it's noticed
+   service-worker update check). Pinned to the top so it's noticed
    without covering anything the Learner is reading below it. Shown only
    on the map and stats screens (updateBannerVisibility); never the quiz,
    where nothing should compete for attention mid-question. */

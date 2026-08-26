@@ -1,6 +1,6 @@
 // WebAudio synthesis for ticket #13's five audio moments (CONTEXT.md /
 // the issue's feedback-matrix table). Deliberately NOT unit-tested the
-// way celebrationQueue.ts is - there is no meaningful pure logic here to
+// way celebrationQueue.ts is: there is no meaningful pure logic here to
 // assert on without a real AudioContext, and jsdom doesn't provide one.
 // The mute flag and lazy-init guard below are the only state; the rest
 // is direct node wiring, kept in this one module so main.ts never touches
@@ -17,8 +17,8 @@ let muted = false;
 
 // Browsers refuse to produce sound from an AudioContext that wasn't
 // created/resumed inside a user-gesture handler. main.ts calls this from
-// the Progress map's "Practice" tap - the landing flow's free gesture
-// (CONTEXT.md) - and, defensively, from the very first pointerdown/keydown
+// the Progress map's "Practice" tap (the landing flow's free gesture,
+// CONTEXT.md) and, defensively, from the very first pointerdown/keydown
 // anywhere, since a same-day return visit skips the map and lands
 // straight on the quiz (route.ts's decideLanding), where the first
 // keypad/keyboard press is the only gesture on offer instead.
@@ -28,7 +28,7 @@ export function initAudio(): void {
     return;
   }
   const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!Ctor) return; // No WebAudio support - sound is a nice-to-have, never a hard dependency for practicing.
+  if (!Ctor) return; // No WebAudio support. Sound is a nice-to-have, never a hard dependency for practicing.
   ctx = new Ctor();
 }
 
@@ -43,7 +43,7 @@ export function isMuted(): boolean {
 // A single tone: attack straight to `peak`, exponential decay to
 // near-silence by `now + duration`. Exponential ramps can't target
 // exactly 0 (they're a divide), so every envelope bottoms out at a tiny
-// epsilon instead - inaudible, but keeps the Web Audio API happy.
+// epsilon instead: inaudible, but keeps the Web Audio API happy.
 function tone(
   audio: AudioContext,
   startAt: number,
@@ -64,7 +64,7 @@ function tone(
   osc.stop(startAt + duration + 0.02);
 }
 
-// A tone that slides from one frequency to another - used for the
+// A tone that slides from one frequency to another, used for the
 // personal-best "ascending chirp" and as a building block for the
 // range-expansion swell.
 function sweep(
@@ -89,13 +89,13 @@ function sweep(
   osc.stop(startAt + duration + 0.02);
 }
 
-// Correct: a short, soft tick - just present enough to confirm the tap
+// Correct: a short, soft tick, just present enough to confirm the tap
 // landed, over almost before it's noticed.
 function playCorrect(audio: AudioContext, now: number): void {
   tone(audio, now, 1046.5, 0.09, 0.18, "sine"); // C6
 }
 
-// Wrong: THE load-bearing sound in this file. Soft and low on purpose -
+// Wrong: the sound that matters most in this file. Soft and low on purpose;
 // the issue is explicit that a harsh buzzer teaches a nine-year-old to
 // fear the app. One low sine tone, gentle volume, no harmonics-heavy
 // waveform (square/sawtooth would read as a buzzer), longer and softer
@@ -105,7 +105,7 @@ function playWrong(audio: AudioContext, now: number): void {
 }
 
 // Personal best: brighter than the plain correct tick, and rising rather
-// than static - the "ascending chirp" the table calls for.
+// than static, the "ascending chirp" the table calls for.
 function playPersonalBest(audio: AudioContext, now: number): void {
   sweep(audio, now, 700, 1400, 0.22, 0.22, "triangle");
 }
@@ -114,7 +114,7 @@ function playPersonalBest(audio: AudioContext, now: number): void {
 // design (the issue: "it's the only event that represents weeks of
 // work"). A rising major-triad arpeggio (root-third-fifth-octave) layered
 // with a low sweep underneath, at a higher peak gain than every other
-// sound here - the one moment allowed to be big.
+// sound here. It's the one moment allowed to be big.
 function playRangeExpansion(audio: AudioContext, now: number): void {
   const root = 261.6; // C4
   const notes = [root, root * 1.25, root * 1.5, root * 2]; // C-E-G-C

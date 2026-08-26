@@ -28,7 +28,7 @@ function deps(overrides: { random?: () => number; now?: () => number } = {}) {
 }
 
 // Local-time construction, matching dayKey's use of local calendar-day
-// getters - this keeps the hardcoded "2026-01-01"-style assertions below
+// getters. This keeps the hardcoded "2026-01-01"-style assertions below
 // correct regardless of which timezone the test runs in.
 const DAY0 = new Date(2026, 0, 1).getTime();
 const day = (n: number) => DAY0 + n * DAY_MS;
@@ -61,7 +61,7 @@ describe("advanceStreak", () => {
 
   it("rolls 1/(missed+1) odds after a gap, succeeding under the threshold", () => {
     const afterDay0 = advanceStreak(NEW_STREAK, day(0), 0.5).streak;
-    // Jump straight to day 2 - day 1 had zero Attempts, so missedDays = 1, p = 1/2.
+    // Jump straight to day 2: day 1 had zero Attempts, so missedDays = 1, p = 1/2.
 
     const { streak } = advanceStreak(afterDay0, day(2), 0.49);
 
@@ -85,14 +85,14 @@ describe("advanceStreak", () => {
     const afterFailedDay2 = advanceStreak(afterDay0, day(2), 0.9).streak;
     expect(afterFailedDay2.missedDays).toBe(1);
 
-    // Day 3: practice again, still fail - missedDays must still read 1 (p=1/2),
+    // Day 3: practice again, still fail. missedDays must still read 1 (p=1/2),
     // NOT 2, even though a full day has passed with no success.
     const afterFailedDay3 = advanceStreak(afterFailedDay2, day(3), 0.49);
 
     expect(afterFailedDay3.streak.count).toBe(2); // 0.49 < 1/2, recovers
   });
 
-  it("never caps retries - recovery is still possible after many practiced-but-failed days", () => {
+  it("never caps retries: recovery is still possible after many practiced-but-failed days", () => {
     let streak = advanceStreak(NEW_STREAK, day(0), 0.5).streak; // count=1, then day 1 missed
     for (let d = 2; d <= 20; d++) {
       streak = advanceStreak(streak, day(d), 0.9).streak; // always fail (p=1/2, 0.9 loses)
@@ -226,7 +226,7 @@ describe("computeWeight", () => {
 
   it("weighs a Fact sitting exactly on its own target at 1", () => {
     // Weight is Fluency as a multiple of the Fact's own target, so 1 is
-    // the natural unit - right at the bar. Everything else reads against it.
+    // the natural unit, right at the bar. Everything else reads against it.
     expect(computeWeight(FACT, stateWith(TARGET, 0), 0)).toBeCloseTo(1, 10);
   });
 
@@ -290,7 +290,7 @@ describe("selectionWeights", () => {
   // Facts still sit past their target, the rest comfortably inside it.
   // Everything was last practiced yesterday, so the same-day damper stays
   // out of the share arithmetic and these are ADR 0005's plain squared
-  // ratios. This is that ADR's scenario one step further along - the
+  // ratios. This is that ADR's scenario one step further along: the
   // handful of stubborn Facts are outvoted by the mastered headcount.
   function nearlyMastered(range: { size: number }, unmasteredCount: number, unmasteredMs = 3_000) {
     const fluency: EngineState["fluency"] = {};
@@ -315,7 +315,7 @@ describe("selectionWeights", () => {
     const state = nearlyMastered(range, 2);
 
     // Precondition: unaided, the 23 mastered Facts crowd the 2 stubborn
-    // ones out - which is the complaint this floor exists to answer.
+    // ones out, which is the complaint this floor exists to answer.
     expect(unmasteredShare(facts.map((fact) => computeWeight(fact, state, 0)), 2)).toBeLessThan(UNMASTERED_SHARE_FLOOR);
 
     expect(unmasteredShare(selectionWeights(facts, state, 0), 2)).toBeCloseTo(UNMASTERED_SHARE_FLOOR, 10);
@@ -333,7 +333,7 @@ describe("selectionWeights", () => {
   });
 
   it("leaves weighting untouched when the still-to-master Facts already clear the floor", () => {
-    // The floor is a floor, not a quota - right after an expansion the
+    // The floor is a floor, not a quota. Right after an expansion the
     // new row and column are unattempted and already dominate the draw,
     // and nothing should pull them back down to it.
     const range = { size: 5 };
@@ -418,8 +418,8 @@ describe("submitAttempt", () => {
 
   it("can select every Fact across the full range when weights are equal, not just a subset", () => {
     // All-unattempted Facts share the same UNATTEMPTED_WEIGHT_MS weight, so
-    // sweeping the random source evenly should reach every Fact exactly once -
-    // this exercises the same weighted-selection math ticket #6/#7 rely on,
+    // sweeping the random source evenly should reach every Fact exactly once.
+    // This exercises the same weighted-selection math ticket #6/#7 rely on,
     // just with a uniform special case.
     const range = { size: 3 };
     const allFacts = listFacts(range);
@@ -438,7 +438,7 @@ describe("submitAttempt", () => {
     // every wrong Attempt against it (BOOST_ATTEMPTS resets rather than
     // decays when the boosted Fact is the one just answered), which can
     // make it the heaviest candidate again and again. Weighting alone
-    // doesn't rule out redrawing it immediately - pickFact's hard
+    // doesn't rule out redrawing it immediately; pickFact's hard
     // exclusion of the just-answered Fact does. `random: () => 0` always
     // picks the heaviest-weighted candidate first, the worst case for a
     // same-Fact repeat if the exclusion weren't applied.
@@ -522,7 +522,7 @@ describe("submitAttempt", () => {
   it("blends subsequent correct Attempts into Fluency as a recency-weighted average", () => {
     // Pin the Fact after the first Attempt: size 1's lone Fact gets
     // Mastered by that Attempt and expands the range, and pickFact now
-    // hard-excludes whichever Fact was just answered from the next draw -
+    // hard-excludes whichever Fact was just answered from the next draw,
     // so without pinning, the second Attempt below would land on a
     // different Fact than "1x1".
     const fact = { a: 1, b: 1 };
@@ -546,8 +546,8 @@ describe("submitAttempt", () => {
 
   it("celebrates correctness-only, not personal-best, on a Fact's first-ever Attempt", () => {
     // size 2 (not 1) so this single Attempt doesn't also Master 100% of
-    // the range and pull in an incidental range-expansion celebration -
-    // this test is only about the correctness-only/personal-best split.
+    // the range and pull in an incidental range-expansion celebration.
+    // This test is only about the correctness-only/personal-best split.
     const state = createInitialState({ size: 2 }, deps());
 
     const result = submitAttempt(state, { type: "attemptSubmitted", answer: 1, responseTimeMs: 100 }, deps());
@@ -556,7 +556,7 @@ describe("submitAttempt", () => {
   });
 
   it("celebrates personal-best when beating the Fluency baseline (plus typing allowance)", () => {
-    // Pin the Fact after the first Attempt - see the comment in "blends
+    // Pin the Fact after the first Attempt; see the comment in "blends
     // subsequent correct Attempts..." above.
     const fact = { a: 1, b: 1 };
     let state = createInitialState({ size: 1 }, deps());
@@ -568,7 +568,7 @@ describe("submitAttempt", () => {
   });
 
   it("celebrates correctness-only, not personal-best, when not beating the baseline", () => {
-    // Pin the Fact after the first Attempt - see the comment in "blends
+    // Pin the Fact after the first Attempt; see the comment in "blends
     // subsequent correct Attempts..." above.
     const fact = { a: 1, b: 1 };
     let state = createInitialState({ size: 1 }, deps());
@@ -582,9 +582,9 @@ describe("submitAttempt", () => {
   it("compares against the decayed baseline, not the stale stored average", () => {
     // Baseline set at t=0 with a 1000ms average. Two days later, decay has
     // pushed the *current* Fluency to 1000 + 2*50 = 1100ms, so an identical
-    // 1000ms response is now a personal best - it wasn't one against the
+    // 1000ms response is now a personal best. It wasn't one against the
     // raw, undecayed average.
-    // Pin the Fact after the first Attempt - see the comment in "blends
+    // Pin the Fact after the first Attempt; see the comment in "blends
     // subsequent correct Attempts..." above.
     const fact = { a: 1, b: 1 };
     let state = createInitialState({ size: 1 }, deps({ now: () => 0 }));
@@ -605,7 +605,7 @@ describe("submitAttempt", () => {
   it("gives no typing-allowance slack to the personal-best comparison", () => {
     // This compares a Fact against its own past times, so the typing is
     // identical on both sides and cancels. Adding the allowance here was
-    // pure slack - it celebrated answers *slower* than the Learner's own
+    // pure slack: it celebrated answers *slower* than the Learner's own
     // average, which only got worse as the allowance grew.
     // Pin the Fact after each step (range size 8 has many Facts, and
     // weighted selection would otherwise move on to a different one).
@@ -621,7 +621,7 @@ describe("submitAttempt", () => {
   });
 
   it("still counts a wrong Attempt as practice for decay purposes, without changing the average", () => {
-    // Pin the Fact after the first Attempt - see the comment in "blends
+    // Pin the Fact after the first Attempt; see the comment in "blends
     // subsequent correct Attempts..." above.
     const fact = { a: 1, b: 1 };
     let state = createInitialState({ size: 1 }, deps({ now: () => 0 }));
@@ -765,7 +765,7 @@ describe("submitAttempt", () => {
     });
 
     it("blends Accuracy as a recency-weighted average, mirroring Fluency's EMA weighting", () => {
-      // Pin the Fact after the first Attempt - see the comment in "blends
+      // Pin the Fact after the first Attempt; see the comment in "blends
       // subsequent correct Attempts..." (outside the Accuracy describe block).
       const fact = { a: 1, b: 1 };
       let state = createInitialState({ size: 1 }, deps());
@@ -779,7 +779,7 @@ describe("submitAttempt", () => {
     });
 
     it("keeps a lifetime Attempt count that only ever grows, across both correct and wrong Attempts", () => {
-      // Pin the Fact after each Attempt - see the comment in "blends
+      // Pin the Fact after each Attempt; see the comment in "blends
       // subsequent correct Attempts..." (outside the Accuracy describe block).
       const fact = { a: 1, b: 1 };
       let state = createInitialState({ size: 1 }, deps());
@@ -800,7 +800,7 @@ describe("submitAttempt", () => {
       ).state;
       const freshAccuracy = state.accuracy["1x1"];
 
-      // A long, Fact-untouched gap passes - only *this* Fact's Accuracy is
+      // A long, Fact-untouched gap passes. Only *this* Fact's Accuracy is
       // being checked, and nothing here re-derives it from elapsed time the
       // way currentFluencyMs does for Fluency.
       const result = submitAttempt(
@@ -810,7 +810,7 @@ describe("submitAttempt", () => {
       );
 
       // The pre-Attempt record (captured well before the gap) is unchanged
-      // by the passage of time - only this new wrong Attempt blends it down.
+      // by the passage of time; only this new wrong Attempt blends it down.
       expect(freshAccuracy).toEqual({ correctShare: 1, attemptCount: 1 });
       expect(result.state.accuracy["1x1"].correctShare).toBeCloseTo(0.7);
     });
@@ -851,7 +851,7 @@ describe("submitAttempt", () => {
       expect(result.state.needsRedemption["1x1"]).toBeUndefined();
     });
 
-    it("does not clear redemption via the boost counter fading out - only a correct Attempt on the Fact clears it", () => {
+    it("does not clear redemption via the boost counter fading out; only a correct Attempt on the Fact clears it", () => {
       // ADR 0003's trap: boosts fade after BOOST_ATTEMPTS Attempts across
       // ANY Fact, so cycling other Facts must not silently clear
       // redemption on the untouched wrong Fact.
@@ -933,7 +933,7 @@ describe("submitAttempt", () => {
       // size 1 => a single Fact { a: 1, b: 1 }. Seed a Fluency baseline slow
       // enough that a 100ms response beats it (personal-best) but close
       // enough to the target that the *blended* average still lands under
-      // TARGET_SPEED_MS (mastery, hence expansion - a 5000ms baseline would
+      // TARGET_SPEED_MS (mastery, hence expansion; a 5000ms baseline would
       // pass the personal-best check but EMA-blend to well over the
       // mastery target from a single fast Attempt). A Streak already at 6
       // makes this the 7th day (Milestone) with guaranteed recovery
@@ -990,7 +990,7 @@ describe("submitAttempt", () => {
     });
 
     it("counts a new calendar day even when the Streak fails to recover it", () => {
-      // A Streak broken several days ago with a low recovery chance -
+      // A Streak broken several days ago with a low recovery chance.
       // `random` always returns 1, guaranteeing the roll misses regardless
       // of missedDays, so lastStreakDay never advances to today. Days
       // practiced must still climb: it tracks practice, not Streak credit

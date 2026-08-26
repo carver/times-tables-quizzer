@@ -6,7 +6,7 @@
 // today's practice hasn't happened yet.
 //
 // Runs under its own tsconfig (tsconfig.sw.json, WebWorker lib rather
-// than DOM - see its comment) since `self` here is a ServiceWorkerGlobalScope,
+// than DOM; see its comment) since `self` here is a ServiceWorkerGlobalScope,
 // not a Window, and the two typings conflict if mixed in one program.
 import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
 import { registerRoute } from "workbox-routing";
@@ -14,14 +14,14 @@ import { CacheFirst } from "workbox-strategies";
 import { getLastActivityDay, shouldRemind } from "./reminderStore";
 
 // Periodic Background Sync isn't in TypeScript's shipped DOM/WebWorker
-// libs (it's Chromium-only and unstandardized) - minimal ambient shape
-// for just what this file touches.
+// libs (it's Chromium-only and unstandardized), so this is a minimal
+// ambient shape for just what this file touches.
 interface PeriodicSyncEvent extends ExtendableEvent {
   readonly tag: string;
 }
 
 // vite-plugin-pwa's injectManifest strategy replaces this with the real
-// list of built asset URLs at build time - the standard Workbox+Vite
+// list of built asset URLs at build time, the standard Workbox+Vite
 // boilerplate for typing that replacement.
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ url: string; revision: string | null }>;
@@ -32,11 +32,11 @@ cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
 // The cloudSync (Firebase) and pairingQrCode chunks are excluded from
-// the precache manifest above on purpose (vite.config.ts's globIgnores)
-// - each is only ever downloaded by a device that actually dynamically
+// the precache manifest above on purpose (vite.config.ts's globIgnores).
+// Each is only ever downloaded by a device that dynamically
 // imports it (main.ts, once sync is turned on / "Show QR code" is
 // tapped). This route just means that once a device has fetched either,
-// it's cached like everything else for offline reuse - never fetched
+// it's cached like everything else for offline reuse, never fetched
 // eagerly by every installed device up front.
 registerRoute(
   ({ url }) => /\/(cloudSync|pairingQrCode)-.*\.js$/.test(url.pathname),

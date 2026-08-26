@@ -5,23 +5,23 @@ A practice app that drills a single learner on multiplication facts, aiming to b
 ## Language
 
 **Learner**:
-The one person using the app — currently a specific 9-year-old practicing multiplication facts. A single fixed persona: this app has one Learner per Profile, never several to switch between within one.
+The one person using the app, currently a specific 9-year-old practicing multiplication facts. A single fixed persona: this app has one Learner per Profile, never several to switch between within one.
 _Avoid_: User, student, player
 
 **Profile**:
-The shareable, syncable unit of one Learner's progress (docs/adr/0006) — a device joins a Profile via a one-time pairing link rather than a recurring export/import, and any number of devices can share one. Deliberately not a "Household": bundling multiple Learners' progress into one shared document would let two Learners practicing on two different devices at once clobber each other's concurrent writes, so each Learner's progress is its own independent Profile instead. This app's own UI only ever creates/shows one Profile at a time — the data model supports more without a rework, but nothing here builds the UI to manage several.
+The shareable, syncable unit of one Learner's progress (docs/adr/0006). A device joins a Profile via a one-time pairing link rather than a recurring export/import, and any number of devices can share one. Deliberately not a "Household": bundling multiple Learners' progress into one shared document would let two Learners practicing on two different devices at once clobber each other's concurrent writes, so each Learner's progress is its own independent Profile instead. This app's own UI only ever creates and shows one Profile at a time. The data model supports more without a rework, but nothing here builds the UI to manage several.
 _Avoid_: Household, Account, User, Family
 
 **Fact**:
-A single multiplication combination (e.g., "7 × 8") — the atomic unit the Learner is quizzed on and progress is tracked against.
+A single multiplication combination (e.g., "7 × 8"), the atomic unit the Learner is quizzed on and progress is tracked against.
 _Avoid_: Problem, question
 
 **Attempt**:
-One instance of the Learner being shown a Fact and responding. Produces a correctness result and a response time. Only the *first* response to a Fact is an Attempt: neither the Retry that follows a wrong one nor retyping the correct answer afterwards is an Attempt — both are practice, not measurement, and never feed Fluency, Accuracy, or the Streak. A response time is capped (`MAX_RESPONSE_MS` in engine.ts) before it can feed Fluency or a personal-best comparison — the clock measures recall speed, not how long the Learner was away from the phone before answering.
+One instance of the Learner being shown a Fact and responding. Produces a correctness result and a response time. Only the *first* response to a Fact is an Attempt: neither the Retry that follows a wrong one nor retyping the correct answer afterwards is an Attempt. Both are practice, not measurement, and never feed Fluency, Accuracy, or the Streak. A response time is capped (`MAX_RESPONSE_MS` in engine.ts) before it can feed Fluency or a personal-best comparison, because the clock measures recall speed, not how long the Learner was away from the phone before answering.
 _Avoid_: Try, guess, answer (as a noun for the event)
 
 **Retry**:
-The single extra, unaided go at a Fact the Learner gets straight after answering it wrong (docs/adr/0007) — the same Fact, its answer still hidden, so the second go is recall rather than copying. Not an Attempt: the Fact was already measured by the wrong Attempt, and nothing about a Retry feeds Fluency, Accuracy, or the Streak. There is exactly one per wrong Attempt — a wrong Retry gives the answer up and hands over to the retype.
+The single extra, unaided go at a Fact the Learner gets straight after answering it wrong (docs/adr/0007). It's the same Fact with its answer still hidden, so the second go is recall rather than copying. Not an Attempt: the Fact was already measured by the wrong Attempt, and nothing about a Retry feeds Fluency, Accuracy, or the Streak. There is exactly one per wrong Attempt. A wrong Retry gives the answer up and hands over to the retype.
 _Avoid_: Second chance, do-over, extra attempt
 
 **Active range**:
@@ -33,7 +33,7 @@ A per-Fact, recency-weighted average of correct Attempts' response times, which 
 _Avoid_: Score, mastery, speed
 
 **Accuracy**:
-A per-Fact, recency-weighted share of Attempts that were correct. Unlike Fluency, it does *not* decay with time — forgetting shows up as slowness first, and a Learner who takes a holiday hasn't become less accurate. Reported to the Learner; it deliberately doesn't feed Fact selection or the progression threshold.
+A per-Fact, recency-weighted share of Attempts that were correct. Unlike Fluency, it does *not* decay with time: forgetting shows up as slowness first, and a Learner who takes a holiday hasn't become less accurate. Reported to the Learner; it deliberately doesn't feed Fact selection or the progression threshold.
 _Avoid_: Correctness rate, success rate, score
 
 **Mastered**:
@@ -41,15 +41,15 @@ A Fact whose Fluency is currently under the target speed *and* which has been an
 _Avoid_: Learned, known
 
 **Celebration**:
-The positive feedback produced by an Attempt. An Attempt yields a *set* of Celebrations, not one — the same Attempt can be a personal best, expand the Active range, and hit a Milestone. Each is either **inline** (plays over the practice screen without interrupting) or a **takeover** (fills the screen and waits for the Learner to dismiss it).
+The positive feedback produced by an Attempt. An Attempt yields a *set* of Celebrations, not one: the same Attempt can be a personal best, expand the Active range, and hit a Milestone. Each is either **inline** (plays over the practice screen without interrupting) or a **takeover** (fills the screen and waits for the Learner to dismiss it).
 _Avoid_: Reward, feedback, animation
 
 **Progress map**:
-The Learner's view of the whole 12 × 12 grid of Facts, with the conquered corner filled and the rest still to come — the app's home screen. Shows where the Active range currently reaches and how close it is to expanding.
+The Learner's view of the whole 12 × 12 grid of Facts, with the conquered corner filled and the rest still to come. It's the app's home screen. Shows where the Active range currently reaches and how close it is to expanding.
 _Avoid_: Dashboard, home, level select
 
 **Streak**:
-A count of consecutive days with at least one Attempt. A day with zero Attempts breaks it, but on return each Attempt has a `1 / (missed days + 1)` chance of recovering it — adding 1 for the return day only, never backfilling the missed days. "Missed days" counts only days with zero Attempts; practicing without yet recovering doesn't worsen the odds. Rolling stops once recovery succeeds, or after the first Attempt on an unbroken day.
+A count of consecutive days with at least one Attempt. A day with zero Attempts breaks it, but on return each Attempt has a `1 / (missed days + 1)` chance of recovering it, adding 1 for the return day only, never backfilling the missed days. "Missed days" counts only days with zero Attempts; practicing without yet recovering doesn't worsen the odds. Rolling stops once recovery succeeds, or after the first Attempt on an unbroken day.
 _Avoid_: Combo, chain
 
 **Milestone**:
@@ -57,5 +57,5 @@ A Streak count that's a multiple of 7, triggering an escalated celebration beyon
 _Avoid_: Badge, achievement
 
 **Typing allowance**:
-A fixed amount of extra time added to the progression target for each digit beyond the first in the correct answer, so a Fact with a multi-digit product (e.g. "144") isn't held to the same bar as a single-digit one (e.g. "6") purely for taking longer to type. Applies only where Facts with different digit counts are measured against a shared bar — never to the stored Fluency average, and never to the personal-best comparison, where a Fact is measured against its own history and the typing is identical on both sides.
+A fixed amount of extra time added to the progression target for each digit beyond the first in the correct answer, so a Fact with a multi-digit product (e.g. "144") isn't held to the same bar as a single-digit one (e.g. "6") purely for taking longer to type. Applies only where Facts with different digit counts are measured against a shared bar. Never to the stored Fluency average, and never to the personal-best comparison, where a Fact is measured against its own history and the typing is identical on both sides.
 _Avoid_: Padding, buffer

@@ -28,7 +28,7 @@ jobs:
       - run: npm run test
 
       # The e2e suite's second webServer (playwright.config.ts) is the
-      # Firebase Local Emulator Suite (docs/adr/0006) - its Firestore
+      # Firebase Local Emulator Suite (docs/adr/0006). Its Firestore
       # component is a JVM under the hood, which ubuntu-latest doesn't
       # reliably ship on PATH by default, and firebase-tools downloads the
       # emulator JAR on first use. Doing both explicitly here, as their own
@@ -56,8 +56,8 @@ jobs:
           retention-days: 7
 
   # Publishes whatever is on main to GitHub Pages, gated on the tests
-  # above - main is the version the Learner actually opens, so a red
-  # build must never reach it.
+  # above. main is the version the Learner opens, so a red build must
+  # never reach it.
   deploy:
     needs: test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -78,11 +78,11 @@ jobs:
 
       - run: npm ci
       # Bakes real Firebase config into the deployed build so the live
-      # site can actually sync (docs/adr/0006), not just local dev - only
+      # site can sync (docs/adr/0006), not only local dev. Only
       # meaningful once these repo variables are set; until then they're
       # empty and cloudSync.ts falls back to its "demo-" project default
       # (harmless: it just means the deployed site's sync toggle can't
-      # reach a real backend yet). Repo *variables*, not secrets - a
+      # reach a real backend yet). Repo *variables*, not secrets. A
       # Firebase web config is public by design (access control is
       # Firestore Security Rules' job, not hiding these values).
       - run: npm run build
@@ -94,8 +94,8 @@ jobs:
 
       # enablement: true asks the action to turn Pages on itself. On this
       # repo that call comes back "Resource not accessible by
-      # integration" - creating a Pages site needs repo admin, which the
-      # workflow token doesn't have - so Pages has to be switched on once
+      # integration": creating a Pages site needs repo admin, which the
+      # workflow token doesn't have, so Pages has to be switched on once
       # by hand under Settings > Pages > Source: GitHub Actions. It's kept
       # set because it costs nothing once Pages exists, and it means a
       # fork whose token does have the rights needs no manual step.

@@ -15,7 +15,7 @@ function deps(overrides: { random?: () => number; now?: () => number } = {}) {
   return { random: overrides.random ?? (() => 0), now: overrides.now ?? (() => 0) };
 }
 
-// Matches engine.test.ts's DAY_MS/day helpers - needed here only for the
+// Matches engine.test.ts's DAY_MS/day helpers. Needed here only for the
 // one test that has to land a Streak Milestone on a specific calendar
 // day (dayKey itself is the engine's, imported above, not reimplemented).
 const DAY_MS = 86_400_000;
@@ -106,7 +106,7 @@ describe("pressEnter", () => {
   it("submits the typed answer as an Attempt, advances to the next Fact, and resets the timer on a correct answer", () => {
     // size 2 (not 1, unlike engineWithSingleFact) so this single Attempt
     // doesn't also Master 100% of the range and pull in an incidental
-    // range-expansion celebration - random: () => 0 still deterministically
+    // range-expansion celebration. random: () => 0 still deterministically
     // picks { a: 1, b: 1 } first, so the hardcoded "1" answer still applies.
     const engine = createInitialState({ size: 2 }, deps({ now: () => 0 }));
     const screen = { ...createInitialScreen(engine, deps({ now: () => 0 })), typed: "1" };
@@ -135,7 +135,7 @@ describe("pressEnter", () => {
 
   it("surfaces a Milestone celebration on the incorrect outcome when the wrong Attempt still completes it", () => {
     // Streak count 6, guaranteed recovery on the very next consecutive
-    // day (missedDays=0) - the 7th day is a Milestone regardless of
+    // day (missedDays=0). The 7th day is a Milestone regardless of
     // whether this Attempt itself was answered correctly.
     const engine: EngineState = {
       ...engineWithSingleFact({ now: () => day(5) }),
@@ -195,12 +195,12 @@ describe("pressEnter", () => {
     // Cleared, so the Retry's digits aren't sitting there to be
     // mistaken for progress on the retype.
     expect(correcting.typed).toBe("");
-    // The Retry is practice, not measurement (CONTEXT.md) - the
+    // The Retry is practice, not measurement (CONTEXT.md). The
     // engine saw exactly one wrong Attempt, back at the first Enter.
     expect(next.engine).toBe(retrying.engine);
   });
 
-  it("does not call submitAttempt for a matching correction retype - the retype is not an Attempt", () => {
+  it("does not call submitAttempt for a matching correction retype, since the retype is not an Attempt", () => {
     const afterTwoWrongs = correctingAfterTwoWrongs(engineWithSingleFact({ now: () => 0 }));
     const boostedBefore = afterTwoWrongs.engine.boosted["1x1"];
 
@@ -208,7 +208,7 @@ describe("pressEnter", () => {
     const { screen: next, outcome } = pressEnter(correctionScreen, deps({ now: () => 8_000 }));
 
     expect(outcome).toEqual({ kind: "correction-dismissed" });
-    // Same engine reference/value as before the retype - nothing in the
+    // Same engine reference/value as before the retype. Nothing in the
     // engine (Fluency, boosted/Streak) moved as a result of dismissing.
     expect(next.engine).toBe(afterTwoWrongs.engine);
     expect(next.engine.boosted["1x1"]).toBe(boostedBefore);
@@ -272,7 +272,7 @@ describe("restartFactTimer", () => {
     expect(restartFactTimer(screen, deps({ now: () => 5_000 }))).toBe(screen);
   });
 
-  it("leaves a Retry alone too - it is practice on an already-measured Fact, not a timed Attempt", () => {
+  it("leaves a Retry alone too: it is practice on an already-measured Fact, not a timed Attempt", () => {
     let screen: ScreenState = createInitialScreen(engineWithSingleFact(), deps());
     screen = pressDigit(screen, "9");
     screen = pressEnter(screen, deps()).screen;

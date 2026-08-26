@@ -30,13 +30,13 @@ export type FluencyRecord = {
 
 // A per-Fact, recency-weighted share of correct Attempts (CONTEXT.md).
 // Unlike FluencyRecord this deliberately carries no "lastAttemptAt" /
-// decay input - Accuracy does not decay with time, so there is nothing
+// decay input. Accuracy does not decay with time, so there is nothing
 // for a decay function to read. It is display-only: nothing in this
 // module may consult it when computing selection weight or the
 // progression threshold.
 export type AccuracyRecord = {
   // EMA of correctness (1 for a correct Attempt, 0 for wrong), blended
-  // with RECENCY_WEIGHT - the same weighting Fluency uses, so there's one
+  // with RECENCY_WEIGHT, the same weighting Fluency uses, so there's one
   // mental model for "recency-weighted" rather than two.
   correctShare: number;
   // Lifetime Attempt count for this Fact (correct or not). This is what
@@ -48,8 +48,8 @@ export type AccuracyRecord = {
 export type StreakState = {
   count: number;
   // The calendar day (see dayKey) the Streak count last incremented on,
-  // and the last day - possibly later, if practiced-but-not-recovered
-  // days followed - with at least one Attempt. null means "never".
+  // and the last day with at least one Attempt (possibly later, if
+  // practiced-but-not-recovered days followed). null means "never".
   lastStreakDay: string | null;
   lastActivityDay: string | null;
   // Frozen while lastActivityDay keeps advancing (practicing, even
@@ -71,7 +71,7 @@ export type EngineState = {
   boosted: Record<FactKey, number>;
   // ADR 0003: true while a Fact has been answered wrong more recently
   // than it's been answered right, blocking it from counting as Mastered
-  // until redeemed. Deliberately separate from `boosted` - boosts expire
+  // until redeemed. Deliberately separate from `boosted`: boosts expire
   // after BOOST_ATTEMPTS Attempts across *any* Fact, which would let a
   // wrong Fact quietly re-qualify as Mastered without ever being
   // redrawn (see ADR 0003). Absent/false means no redemption owed;
@@ -80,16 +80,16 @@ export type EngineState = {
   needsRedemption: Record<FactKey, boolean>;
   rangeHistory: RangeHistory;
   // The highest Active range size the Learner has actually seen a
-  // range-expansion takeover dismissed for - not just reached. The two
+  // range-expansion takeover dismissed for, not only reached. The two
   // can diverge: a takeover queued but never shown/dismissed (e.g. the
   // app closing at exactly the wrong moment) leaves this behind
   // `activeRange.size`, which is what main.ts's boot-time catch-up
-  // (celebrationQueue.ts's missedRangeExpansionTakeovers) checks for -
-  // never dropped silently just because progress itself was persisted.
+  // (celebrationQueue.ts's missedRangeExpansionTakeovers) checks for.
+  // It's never dropped silently just because progress itself was persisted.
   acknowledgedRangeSize: number;
   streak: StreakState;
-  // Count of distinct calendar days (dayKey) with at least one Attempt -
-  // ticket #12's statistics header ("days practiced and current Streak,
+  // Count of distinct calendar days (dayKey) with at least one Attempt,
+  // for ticket #12's statistics header ("days practiced and current Streak,
   // and nothing else"). Deliberately separate from `streak`: a broken
   // Streak resets streak.count to effectively restart counting
   // consecutive days, but days practiced is a lifetime total that must
@@ -107,7 +107,7 @@ const MS_PER_DAY = 86_400_000;
 export const UNATTEMPTED_WEIGHT_MS = 5_000;
 
 // How much slower (in ms) a Fact's effective response time is treated as
-// being, per day it has gone unpracticed - the passive decay from ADR
+// being, per day it has gone unpracticed: the passive decay from ADR
 // 0001 / CONTEXT.md's Fluency definition.
 const DECAY_MS_PER_DAY = 50;
 
@@ -139,8 +139,8 @@ export function typingAllowanceMs(answer: number): number {
 
 // The Fact's current Fluency, in ms: its stored average plus decay for
 // time elapsed since it was last practiced. This is "Fluency" as
-// CONTEXT.md defines it - the decay isn't a separate concept layered on
-// top, it's part of what "current Fluency" means. Used both as the base
+// CONTEXT.md defines it. The decay isn't a separate concept layered on
+// top; it's part of what "current Fluency" means. Used both as the base
 // for selection weight (before the boost multiplier) and as the personal
 // baseline for celebration (ticket #6) / the progression check (ticket #7).
 export function currentFluencyMs(record: FluencyRecord | undefined, now: number): number {
@@ -149,8 +149,8 @@ export function currentFluencyMs(record: FluencyRecord | undefined, now: number)
 
 // How sharply selection favours the Facts the Learner is slowest on.
 // Weight is the Fact's Fluency expressed as a multiple of its own target
-// (see factTargetMs) raised to this power. At 1 - which is effectively
-// what weighting by raw milliseconds did - a range with 23 fluent Facts
+// (see factTargetMs) raised to this power. At 1 (which is effectively
+// what weighting by raw milliseconds did) a range with 23 fluent Facts
 // and 2 stubborn ones sent 73% of questions to Facts already fluent,
 // because 23 small weights outnumber 2 large ones. Squaring pulls that
 // to 50%, and the same-day damper below takes it to 18%. See ADR 0005.
@@ -166,7 +166,7 @@ const WEIGHT_EXPONENT = 2;
 const SAME_DAY_MASTERED_DAMPER = 0.25;
 
 // The minimum share of drawn Facts that must be ones the Learner has not
-// Mastered yet - the Facts standing between them and the next Active
+// Mastered yet: the Facts standing between them and the next Active
 // range expansion (or, at the top range, between them and mastering the
 // whole grid). See ADR 0008.
 //
@@ -176,7 +176,7 @@ const SAME_DAY_MASTERED_DAMPER = 0.25;
 // Facts (right after an expansion, say, when the new row and column are
 // all unattempted), nothing is rescaled. 0 disables the floor entirely
 // and restores pure ADR 0005 weighting; 1 would draw nothing but
-// unmastered Facts, which is deliberately not the default - see the ADR
+// unmastered Facts, which is deliberately not the default. See the ADR
 // on why mastered Facts must stay in the pool.
 export const UNMASTERED_SHARE_FLOOR = 0.5;
 
@@ -202,8 +202,8 @@ export function computeWeight(
 
   // Fluency as a multiple of this Fact's own target: below 1 is at or
   // past the bar, above 1 is behind it. Normalizing here (rather than
-  // weighting by raw milliseconds) is what makes the exponent meaningful
-  // - it's the same ratio the Fluency grid buckets by.
+  // weighting by raw milliseconds) is what makes the exponent meaningful.
+  // It's the same ratio the Fluency grid buckets by.
   const ratio = currentFluencyMs(record, now) / factTargetMs(fact);
   let weight = Math.pow(ratio, WEIGHT_EXPONENT);
 
@@ -219,8 +219,8 @@ export function computeWeight(
 // with the not-yet-Mastered ones scaled up together if they'd otherwise
 // account for less than UNMASTERED_SHARE_FLOOR of the total (ADR 0008).
 //
-// Scaling the group as a whole - rather than picking a Fact from a
-// reserved pool - is what keeps every other selection rule intact: the
+// Scaling the group as a whole, rather than picking a Fact from a
+// reserved pool, is what keeps every other selection rule intact: the
 // slowest unmastered Fact is still the likeliest of them, boosts and the
 // same-day damper still apply, and mastered Facts keep the long tail
 // that ADR 0005 deliberately refused to cut off. It also costs no extra
@@ -252,15 +252,15 @@ export function selectionWeights(
   return weights.map((weight, i) => (unmastered[i] ? weight * scale : weight));
 }
 
-// The fixed automaticity bar for progression (ADR 0001) - the same for
+// The fixed automaticity bar for progression (ADR 0001), the same for
 // every Fact, unlike the celebration baseline which is personal per Fact.
 // Raised from 2000ms: the clock starts when the prompt renders, so it is
 // paying for reading the Fact, recalling it, tapping the digits, and
-// pressing Enter - and 2s proved a tight bar for a nine-year-old.
+// pressing Enter, and 2s proved a tight bar for a nine-year-old.
 export const TARGET_SPEED_MS = 2_500;
 
 // A response time this long isn't a slow answer, it's a Learner who
-// walked away mid-question and came back - the fact prompt has no
+// walked away mid-question and came back. The fact prompt has no
 // timeout of its own, so responseTimeMs is otherwise unbounded. Clamping
 // it keeps a single abandoned-and-resumed question from corrupting
 // Fluency's average or falsely winning "personal best".
@@ -273,7 +273,7 @@ export const MASTERY_THRESHOLD = 0.9;
 export const MAX_ACTIVE_RANGE_SIZE = 12;
 
 // ADR 0003: Mastered requires both the speed bar (ADR 0001, unchanged)
-// and redemption - a Fact the Learner has just gotten wrong doesn't
+// and redemption: a Fact the Learner has just gotten wrong doesn't
 // count, however fast its stored Fluency looks, until it's been answered
 // correctly again.
 export function isMastered(fact: Fact, state: Pick<EngineState, "fluency" | "needsRedemption">, now: number): boolean {
@@ -301,7 +301,7 @@ export const MILESTONE_INTERVAL = 7;
 
 export type DayKey = string;
 
-// The Learner's local calendar day, not UTC - a "day" for Streak
+// The Learner's local calendar day, not UTC. A "day" for Streak
 // purposes means the day as the Learner (a specific person in one place,
 // not a server) experiences it. Using UTC would let an evening practice
 // session get miscounted as the next day, or vice versa, depending on
@@ -330,7 +330,7 @@ export type AdvanceStreakResult = {
 // How many calendar days have had zero Attempts since `lastActivityDay`,
 // given a new day boundary has just been crossed. Days with any Attempt
 // (even one that failed to recover the Streak) never count, per the
-// freeze-while-practicing rule - only true zero-Attempt gaps do.
+// freeze-while-practicing rule. Only true zero-Attempt gaps do.
 function accrueMissedDays(streak: StreakState, today: DayKey): number {
   if (streak.lastActivityDay === null || streak.lastActivityDay === today) {
     return streak.missedDays;
@@ -338,7 +338,7 @@ function accrueMissedDays(streak: StreakState, today: DayKey): number {
   return streak.missedDays + (daysBetween(today, streak.lastActivityDay) - 1);
 }
 
-// Runs on every Attempt (correct or not - Streak only cares about
+// Runs on every Attempt (correct or not; Streak only cares about
 // practice happening, per CONTEXT.md). `roll` is a [0, 1) draw from the
 // injected random source, kept as an explicit parameter (rather than
 // pulled from Dependencies internally) so recovery odds are exercised
@@ -348,7 +348,7 @@ export function advanceStreak(streak: StreakState, now: number, roll: number): A
   const today = dayKey(now);
 
   if (streak.lastStreakDay === today) {
-    // Already credited today - no more rolls needed (ADR 0002: "Rolling
+    // Already credited today, so no more rolls needed (ADR 0002: "Rolling
     // stops once recovery succeeds, or after the first Attempt on an
     // unbroken day").
     return { streak, hitMilestone: false };
@@ -379,18 +379,18 @@ export type CelebrationKind = "correctness-only" | "personal-best" | "milestone"
 // CONTEXT.md's Celebration entry: inline plays over the practice screen
 // without interrupting; takeover fills the screen and waits to be
 // dismissed. The tag is a fixed property of the kind (not a per-Attempt
-// choice) - see CELEBRATION_TAGS.
+// choice); see CELEBRATION_TAGS.
 export type CelebrationTag = "inline" | "takeover";
 
 export type Celebration = {
   kind: CelebrationKind;
   tag: CelebrationTag;
-  // The Active range size this expansion reached - only meaningful (and
+  // The Active range size this expansion reached. Only meaningful (and
   // always present) for kind "range-expansion". Threaded through rather
   // than read live off `activeRange.size` at display time, since a
   // boot-time catch-up (celebrationQueue.ts's missedRangeExpansionTakeovers)
   // can replay several past expansions in order, each needing its own
-  // size for the takeover's grid - by the time they're shown,
+  // size for the takeover's grid. By the time they're shown,
   // `activeRange.size` has already moved past all of them.
   rangeSize?: number;
 };
@@ -411,7 +411,7 @@ export function celebration(kind: CelebrationKind, rangeSize?: number): Celebrat
 }
 
 // A single Attempt can plausibly be a personal best, expand the Active
-// range, AND hit a Milestone simultaneously - the best moment the app
+// range, AND hit a Milestone simultaneously, the best moment the app
 // will ever produce. `celebrations` is a set (as an array; each kind can
 // appear at most once per Attempt) so none of those get silently
 // dropped in favor of another, the way `milestone` used to overwrite
@@ -427,17 +427,17 @@ export type Dependencies = {
   now: () => number;
 };
 
-// Draws one Fact at random, weighted by selectionWeights - so the floor
+// Draws one Fact at random, weighted by selectionWeights, so the floor
 // on still-to-master Facts (ADR 0008) is measured over the candidates
-// that can actually be drawn, after the exclusion below, not over the
-// whole Active range.
+// that can be drawn, after the exclusion below, not over the whole
+// Active range.
 //
 // Hard-excludes `previousKey` (the Fact just answered, if any) from the
 // draw whenever another Fact is available, so the same problem can never
 // appear twice in a row. Weighting alone doesn't guarantee this: a Fact
 // that's just been answered wrong is boosted (BOOST_WEIGHT_MULTIPLIER)
 // and, if the Learner is genuinely stuck on it, gets re-boosted to the
-// same full weight on every subsequent wrong Attempt on it - a real
+// same full weight on every subsequent wrong Attempt on it, a real
 // feedback loop that can otherwise dominate the draw for many Attempts
 // in a row. Falls back to including it when it's the only Fact in the
 // Active range (size 1), rather than looping forever with an empty
@@ -474,11 +474,11 @@ export function createInitialState(range: ActiveRange, deps: Dependencies): Engi
     // The starting size counts as "reached" the moment there's a state
     // to have a history at all, same as every later expansion.
     rangeHistory: { [range.size]: deps.now() },
-    // The starting size was never earned, so it needs no celebration -
-    // same reasoning as rangeHistory just above.
+    // The starting size was never earned, so it needs no celebration.
+    // Same reasoning as rangeHistory just above.
     acknowledgedRangeSize: range.size,
     streak: NEW_STREAK,
-    // No Attempt has happened yet - the first submitAttempt call is what
+    // No Attempt has happened yet. The first submitAttempt call is what
     // brings this to 1 (same "nothing counts until an Attempt actually
     // happens" rule NEW_STREAK follows).
     practiceDayCount: 0,
@@ -497,7 +497,7 @@ function decrementBoosts(boosted: Record<FactKey, number>, exceptKey: FactKey): 
 
 // EMA-blends Accuracy the same way Fluency blends response times
 // (RECENCY_WEIGHT), but over correctness (1/0) instead of milliseconds,
-// and with no decay term - Accuracy does not fade with elapsed time.
+// and with no decay term: Accuracy does not fade with elapsed time.
 function updateAccuracy(previous: AccuracyRecord | undefined, correct: boolean): AccuracyRecord {
   const observation = correct ? 1 : 0;
   return {
@@ -534,7 +534,7 @@ export function submitAttempt(
     const baselineMs = currentFluencyMs(previous, now);
     // No typing allowance here, deliberately. This compares a Fact
     // against its own past times, so the typing is identical on both
-    // sides and cancels - adding the allowance was pure slack, handing
+    // sides and cancels. Adding the allowance was pure slack, handing
     // out "personal best" for answers *slower* than the Learner's own
     // average by the whole allowance. The allowance belongs on the
     // progression target, where it compares different Facts to a shared
@@ -555,11 +555,11 @@ export function submitAttempt(
   } else {
     boosted[key] = BOOST_ATTEMPTS;
     // ADR 0003: blocks this Fact from counting as Mastered until it's
-    // answered correctly again - independent of `boosted`, which expires
+    // answered correctly again, independent of `boosted`, which expires
     // on a fixed Attempt count instead of on evidence.
     needsRedemption = { ...state.needsRedemption, [key]: true };
     // A wrong Attempt doesn't change the average (CONTEXT.md: "a wrong
-    // Attempt doesn't feed Fluency"), but it's still practice - so the
+    // Attempt doesn't feed Fluency"), but it's still practice, so the
     // decay clock, which tracks time since last *practiced* rather than
     // last *correct*, should reset if a record already exists.
     if (fluency[key]) {
@@ -574,7 +574,7 @@ export function submitAttempt(
 
   // Compared against the PRE-update streak (not the `streak` advanceStreak
   // returns below) since lastActivityDay advances to `today` on every
-  // Attempt regardless of whether the Streak itself recovers - this is
+  // Attempt regardless of whether the Streak itself recovers. This is
   // "first Attempt of a not-yet-seen calendar day," not "Streak credited
   // today" (ticket #12's days-practiced count must keep climbing even on
   // days that fail to recover a broken Streak).

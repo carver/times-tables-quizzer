@@ -4,7 +4,7 @@ import { CURRENT_SAVE_VERSION, loadState, parseEngineState, saveState, type AppS
 
 const STORAGE_KEY = "times-tables-quizzer:state";
 
-// Vitest's default (node) environment has no global localStorage - this
+// Vitest's default (node) environment has no global localStorage. This
 // is a minimal in-memory stand-in, reset before each test so saves don't
 // leak between them.
 class FakeLocalStorage {
@@ -77,7 +77,7 @@ describe("saveState / loadState round trip", () => {
 });
 
 describe("migration", () => {
-  // Simulates a save written before ticket #10 - no version field and
+  // Simulates a save written before ticket #10: no version field and
   // none of the fields this ticket introduces.
   const preTicket10Save = {
     activeRange: { size: 3 },
@@ -116,7 +116,7 @@ describe("migration", () => {
     expect(loaded?.engine.streak.count).toBe(5);
   });
 
-  // Simulates a save written before ticket #11 - has ticket #10's fields
+  // Simulates a save written before ticket #11: has ticket #10's fields
   // but predates lastMapShownDay entirely.
   const preTicket11Save = {
     ...preTicket10Save,
@@ -138,7 +138,7 @@ describe("migration", () => {
     });
   });
 
-  // Simulates a save written before ticket #12 - has lastMapShownDay but
+  // Simulates a save written before ticket #12: has lastMapShownDay but
   // predates practiceDayCount entirely.
   const preTicket12Save = { ...preTicket11Save, lastMapShownDay: "2026-08-01" };
 
@@ -150,11 +150,11 @@ describe("migration", () => {
     expect(loaded?.engine.practiceDayCount).toBe(0);
   });
 
-  // Simulates a save written before ticket #13 - has practiceDayCount but
+  // Simulates a save written before ticket #13: has practiceDayCount but
   // predates the mute toggle entirely.
   const preTicket13Save = { ...preTicket12Save, practiceDayCount: 4 };
 
-  it("defaults muted to false (unmuted) for a save that predates the toggle - audio defaults on", () => {
+  it("defaults muted to false (unmuted) for a save that predates the toggle, since audio defaults on", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(preTicket13Save));
 
     const loaded = loadState();
@@ -170,11 +170,11 @@ describe("migration", () => {
     expect(loaded?.muted).toBe(true);
   });
 
-  // Simulates a save written before the daily-reminder toggle existed -
+  // Simulates a save written before the daily-reminder toggle existed:
   // has muted but predates remindersEnabled entirely.
   const preReminderSave = { ...preTicket13Save, muted: false };
 
-  it("defaults remindersEnabled to false for a save that predates the toggle - opt-in only, never sprung on an existing save", () => {
+  it("defaults remindersEnabled to false for a save that predates the toggle: opt-in only, never sprung on an existing save", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(preReminderSave));
 
     const loaded = loadState();
@@ -241,7 +241,7 @@ describe("migration", () => {
     expect(loaded?.engine.activeRange).toEqual({ size: 5 });
   });
 
-  it("defaults acknowledgedRangeSize to the save's own current size for a save that predates it - nothing owed retroactively", () => {
+  it("defaults acknowledgedRangeSize to the save's own current size for a save that predates it, so nothing is owed retroactively", () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({ ...preV6NeverExpandedSave, activeRange: { size: 8 }, rangeHistory: { 6: 100, 7: 200, 8: 300 } }),
@@ -252,7 +252,7 @@ describe("migration", () => {
     expect(loaded?.engine.acknowledgedRangeSize).toBe(8);
   });
 
-  it("round-trips an explicit acknowledgedRangeSize rather than overwriting it - a takeover still owed stays owed", () => {
+  it("round-trips an explicit acknowledgedRangeSize rather than overwriting it, so a takeover still owed stays owed", () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -290,7 +290,7 @@ describe("migration", () => {
 
 describe("parseEngineState", () => {
   it("extracts just the EngineState fields from a raw Firestore Profile document (docs/adr/0006)", () => {
-    // A real synced document (cloudSync.ts's writeProfile) - the whole
+    // A real synced document (cloudSync.ts's writeProfile): the whole
     // EngineState plus the two fields every synced document carries that
     // aren't part of EngineState at all: `version` and `updatedAt`
     // (a Firestore server timestamp, not something migrate() reads).

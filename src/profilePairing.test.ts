@@ -10,7 +10,7 @@ import {
 
 const STORAGE_KEY = "times-tables-quizzer:profiles";
 
-// Same minimal in-memory stand-in persistence.test.ts uses - Vitest's
+// Same minimal in-memory stand-in persistence.test.ts uses. Vitest's
 // node environment has no global localStorage.
 class FakeLocalStorage {
   private store = new Map<string, string>();

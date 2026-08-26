@@ -16,7 +16,7 @@ describe("shouldApplyRemoteUpdate", () => {
     expect(shouldApplyRemoteUpdate("quiz")).toBe(false);
   });
 
-  it("applies immediately on every other route - nothing live to disrupt there", () => {
+  it("applies immediately on every other route, where there is nothing live to disrupt", () => {
     expect(shouldApplyRemoteUpdate("map")).toBe(true);
     expect(shouldApplyRemoteUpdate("stats")).toBe(true);
     expect(shouldApplyRemoteUpdate("reset")).toBe(true);

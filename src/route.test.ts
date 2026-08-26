@@ -67,20 +67,20 @@ describe("decideLanding", () => {
 
   it("goes straight to the quiz on a later open the same calendar day with nothing requested", () => {
     // "Nothing requested" is what a genuinely fresh open looks like (no
-    // hash at all) - the once-a-day default only applies then.
+    // hash at all). The once-a-day default only applies then.
     const decision = decideLanding("2026-01-01", day(0) + 5000);
 
     expect(decision).toEqual({ route: "quiz" });
   });
 
-  it("does not set shownOnDay when landing on the quiz - nothing new to persist", () => {
+  it("does not set shownOnDay when landing on the quiz, since there is nothing new to persist", () => {
     const decision = decideLanding("2026-01-01", day(0) + 5000);
 
     expect(decision.shownOnDay).toBeUndefined();
   });
 
   it("honors an explicitly requested route on a later open the same calendar day", () => {
-    // A browser refresh preserves the current hash exactly - reloading
+    // A browser refresh preserves the current hash exactly. Reloading
     // while already on the map (or stats) must not fling the Learner into
     // the quiz just because the map happens to have been shown earlier
     // today.
@@ -108,7 +108,7 @@ describe("the reset route", () => {
   it("survives the landing rule instead of being redirected away", () => {
     // Every other route gets overridden on load by the map-or-quiz
     // landing decision. The reset screen is reachable only by typing its
-    // hash, so redirecting it would make it unreachable on a cold open -
+    // hash, so redirecting it would make it unreachable on a cold open,
     // which is the only way anyone ever opens it.
     expect(decideLanding(null, day(0), "reset").route).toBe("reset");
     expect(decideLanding(dayKey(day(0)), day(0), "reset").route).toBe("reset");

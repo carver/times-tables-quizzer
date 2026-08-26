@@ -2,7 +2,7 @@
 // window.localStorage can't give it: whether the Learner has already
 // practiced today. Service workers run in a separate global scope with
 // no access to the page's localStorage, but both contexts can reach the
-// same origin's IndexedDB - so this mirrors just that one DayKey there,
+// same origin's IndexedDB, so this mirrors just that one DayKey there,
 // rather than duplicating the whole save file. main.ts writes it after
 // every Attempt; sw.ts reads it from the periodicsync handler, where
 // there may be no open page to ask.
@@ -48,7 +48,7 @@ export async function getLastActivityDay(): Promise<DayKey | null> {
 
 // The reminder's entire decision rule: remind unless today's practice has
 // already happened. Kept pure and separate from the IndexedDB plumbing
-// above so it's testable without a browser - mirrors CONTEXT.md's split
+// above so it's testable without a browser. Mirrors CONTEXT.md's split
 // between engine logic and I/O, one level up from the engine itself.
 export function shouldRemind(lastActivityDay: DayKey | null, now: number): boolean {
   return lastActivityDay !== dayKey(now);

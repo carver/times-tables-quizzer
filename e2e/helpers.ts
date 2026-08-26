@@ -9,7 +9,7 @@ export const STORAGE_KEY = "times-tables-quizzer:state";
 export const SAVE_VERSION = 4;
 
 // The engine's local-calendar day key (engine.ts's dayKey). Reimplemented
-// here for the same black-box reason - and because a seed built from UTC
+// here for the same black-box reason, and because a seed built from UTC
 // would land on the wrong day for anyone running these west of Greenwich.
 export function dayKey(date: Date): string {
   const year = date.getFullYear();
@@ -24,7 +24,7 @@ export const YESTERDAY = () => dayKey(new Date(Date.now() - 86_400_000));
 type Seed = {
   masteredCount?: number;
   activeRangeSize?: number;
-  // Defaults to activeRangeSize - "no takeover currently owed", the
+  // Defaults to activeRangeSize, "no takeover currently owed", the
   // common case. Set lower than activeRangeSize to simulate a
   // range-expansion takeover that was never actually dismissed (main.ts's
   // boot-time catch-up, celebrationQueue.ts's missedRangeExpansionTakeovers).
@@ -58,7 +58,7 @@ export async function seed(page: Page, overrides: Seed = {}): Promise<void> {
   const state = {
     activeRange: { size },
     // Defaults to the last Fact in the range, which the loop above never
-    // marks Mastered - so the Attempt a spec drives is always a real one.
+    // marks Mastered, so the Attempt a spec drives is always a real one.
     fact: overrides.fact ?? { a: size, b: size },
     fluency,
     accuracy,
@@ -75,7 +75,7 @@ export async function seed(page: Page, overrides: Seed = {}): Promise<void> {
 
   // Seeds exactly once per browser context, not on every load. An
   // unguarded init script re-writes the save after any reload the app
-  // performs itself - which would silently defeat a spec that reloads to
+  // performs itself, which would silently defeat a spec that reloads to
   // check something was persisted, or erased.
   await page.addInitScript(
     ([key, value]) => {
@@ -106,11 +106,11 @@ export async function answerWithKeypad(page: Page, answer: number): Promise<void
 //
 // Reads and parses inside a single retried block (expect(...).toPass())
 // rather than an assertion-then-separate-read: a caller that navigates to
-// the quiz via a real click - a hashchange event, handled asynchronously
-// (main.ts's own boot comment notes this) - can otherwise have the DOM
+// the quiz via a real click (a hashchange event, handled asynchronously;
+// main.ts's own boot comment notes this) can otherwise have the DOM
 // still mid-transition (blank, or between renders) right as it's read.
 // An earlier version asserted "#prompt contains '?'" and then read its
-// text in a second, separate call - but a render landing in the gap
+// text in a second, separate call, but a render landing in the gap
 // between those two reads meant the assertion could pass against one
 // paint and the read could still land on a blank or stale one right
 // after, parsing NaN and silently going on to press a "NaN" digit that

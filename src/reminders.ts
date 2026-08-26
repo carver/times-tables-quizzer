@@ -1,13 +1,13 @@
 // Wires the "remind me daily" toggle to the Periodic Background Sync API,
 // deliberately NOT unit-tested the way reminderStore.ts's pure
-// shouldRemind is - there's no meaningful logic here to assert on without
+// shouldRemind is. There's no meaningful logic here to assert on without
 // a real ServiceWorkerRegistration and Notification permission prompt,
 // same reasoning as audio.ts's AudioContext.
 //
 // Periodic Background Sync is Chromium-only (Android/ChromeOS/desktop
 // Chrome), requires the app to already be installed, and even there
 // Chrome throttles/denies registration on its own site-engagement
-// heuristic - there is no way to get a guaranteed-timed daily reminder
+// heuristic. There is no way to get a guaranteed-timed daily reminder
 // out of a backend-free web app. isReminderSupported() is what lets the
 // UI say so honestly instead of offering a toggle that silently does
 // nothing on, say, iOS Safari (which has no periodicSync at all).
@@ -34,8 +34,8 @@ export function isReminderSupported(): boolean {
 // Requests notification permission (a user-gesture-gated browser prompt,
 // same family of restriction as audio.ts's AudioContext) and, if granted,
 // registers the daily periodic sync. Resolves false on any refusal or
-// failure - permission denied, the engagement heuristic rejecting
-// registration, anything - so the caller can tell the Learner/parent it
+// failure (permission denied, the engagement heuristic rejecting
+// registration, anything) so the caller can tell the Learner/parent it
 // didn't take rather than assuming success.
 export async function enableDailyReminder(): Promise<boolean> {
   if (!isReminderSupported()) return false;

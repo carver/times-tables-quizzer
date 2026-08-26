@@ -1,9 +1,9 @@
-// Verifies the QR actually decodes back to the original link, not just
-// that some SVG string comes out - rasterizes qrcode-generator's own
+// Verifies the QR decodes back to the original link, not just
+// that some SVG string comes out. Rasterizes qrcode-generator's own
 // module matrix (light/dark cells) into plain RGBA pixels and feeds
 // them to jsQR (a real, independent decoder), rather than trusting the
 // encoder's own claim that it succeeded. Pure pixel math, no canvas/DOM
-// library needed - both encoder and decoder are plain JS.
+// library needed; both encoder and decoder are plain JS.
 import jsQR from "jsqr";
 import qrcode from "qrcode-generator";
 import { describe, expect, it } from "vitest";
@@ -16,7 +16,7 @@ function rasterize(link: string, scale = 4, quietZoneModules = 4) {
 
   const moduleCount = qr.getModuleCount();
   const size = (moduleCount + quietZoneModules * 2) * scale;
-  // White background, fully opaque - jsQR reads standard RGBA.
+  // White background, fully opaque; jsQR reads standard RGBA.
   const data = new Uint8ClampedArray(size * size * 4).fill(255);
 
   for (let row = 0; row < moduleCount; row++) {

@@ -1,9 +1,9 @@
 // Exercises firestore.rules against the real emulator (there is no
-// meaningful way to unit-test a rules file without one - it's its own
+// meaningful way to unit-test a rules file without one; it's its own
 // small interpreted language, not TypeScript). Run via `npm run
 // test:rules`, which wraps this in `firebase emulators:exec` so the
-// emulator is up for the duration of the run and torn down after -
-// never run directly with plain `vitest run`.
+// emulator is up for the duration of the run and torn down after.
+// Never run directly with plain `vitest run`.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   assertFails,

@@ -5,7 +5,7 @@
 import { isMastered, listFacts, MASTERY_THRESHOLD, MAX_ACTIVE_RANGE_SIZE, type EngineState } from "./engine/engine";
 
 export type ProgressReadout =
-  // "N to go" - a count remaining, not a percentage, positioned on the
+  // "N to go": a count remaining, not a percentage, positioned on the
   // current frontier row/column.
   | { kind: "remaining"; count: number }
   // The Active range has reached MAX_ACTIVE_RANGE_SIZE: nothing left to
@@ -17,11 +17,11 @@ export type ProgressReadout =
 // monotonic guarantee: it shows the best masteredCount seen so far this
 // session for the *current* Active range size, never a lower one, even
 // though the true masteredCount genuinely can drop (Fluency decay, a
-// wrong Attempt, or - most dramatically - right after an expansion,
+// wrong Attempt, or, most dramatically, right after an expansion,
 // where a bigger range's mastered share starts far lower). Keyed by
-// Active range size so a fresh size - a genuinely new frontier - starts
+// Active range size so a fresh size (a new frontier) starts
 // its own high-water mark instead of inheriting the old size's, which is
-// exactly how that post-expansion drop is allowed to actually show.
+// exactly how that post-expansion drop is allowed to show.
 export type ProgressHighWaterMark = {
   activeRangeSize: number;
   masteredCount: number;
@@ -40,7 +40,7 @@ export function advanceHighWaterMark(
 
 export type ProgressMapStatus = {
   readout: ProgressReadout;
-  // The high-water mark to carry into the next call - callers must store
+  // The high-water mark to carry into the next call. Callers must store
   // and pass this back in rather than recomputing it themselves, so the
   // readout and the mark it was clamped against never drift apart.
   highWaterMark: ProgressHighWaterMark;
@@ -53,7 +53,7 @@ export type ProgressMapStatus = {
 // The maintenance readout is deliberately NOT clamped by the high-water
 // mark: ticket #11 is explicit that the drift which would be confusing
 // during progression ("142 of 144" dipping to "138 of 144" overnight) is
-// the entire point once the grid is full - it's what says come back
+// the entire point once the grid is full. It's what says come back
 // tomorrow.
 export function computeProgressMapStatus(
   state: Pick<EngineState, "activeRange" | "fluency" | "needsRedemption">,

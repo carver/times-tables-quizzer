@@ -14,13 +14,13 @@ export default defineConfig({
   test: {
     // Scope Vitest to the unit tests next to the source. Without this it
     // also collects `e2e/*.spec.ts`, which are Playwright specs and fail
-    // outright under Vitest - they need a browser and a served app.
+    // outright under Vitest, since they need a browser and a served app.
     include: ["src/**/*.test.ts"],
   },
   plugins: [
     VitePWA({
       // Custom service worker (src/sw.ts) rather than the plugin's fully
-      // generated one - the daily-reminder Periodic Background Sync
+      // generated one: the daily-reminder Periodic Background Sync
       // handler needs code of its own alongside Workbox's precaching.
       strategies: "injectManifest",
       srcDir: "src",
@@ -29,23 +29,23 @@ export default defineConfig({
         // This app is a handful of small hashed bundles, not worth
         // Workbox's default size ceiling warning.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        // The app's dynamically-imported chunks - Firebase's SDK
+        // The app's dynamically-imported chunks, Firebase's SDK
         // (cloudSync, ~175KB gzipped, docs/adr/0006) and the QR code
-        // generator (pairingQrCode) - are deliberately excluded from
+        // generator (pairingQrCode), are deliberately excluded from
         // eager precaching: Workbox's default globPatterns would
         // otherwise have the service worker download both for every
         // installed device up front, on first install, silently
         // defeating the entire point of code-splitting them behind the
         // sync panel's own actions. sw.ts adds a runtime CacheFirst route
-        // for both instead, so each is still cached for offline use -
-        // just only after whichever device actually loads it once.
+        // for both instead, so each is still cached for offline use,
+        // but only after a device loads it once.
         globIgnores: ["**/cloudSync-*.js", "**/pairingQrCode-*.js"],
       },
       // main.ts registers the service worker itself (see the
       // navigator.serviceWorker.register call) so it can be sequenced
       // with the rest of startup rather than an auto-injected script.
       injectRegister: false,
-      // Never run the SW under `vite dev` - the dev server's own
+      // Never run the SW under `vite dev`. The dev server's own
       // module graph already reloads instantly, and a stale precache
       // fighting Vite's dev server during iteration isn't worth it.
       devOptions: { enabled: false },

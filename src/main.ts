@@ -29,7 +29,7 @@ import { isRemoteUpdate, shouldApplyRemoteUpdate } from "./syncDecisions";
 
 // A smaller starting grid gives a bigger, earlier sense of accomplishment
 // on the way to the first expansion. Saves from before this changed carry
-// their own migration in persistence.ts's migrate() - see the version-6
+// their own migration in persistence.ts's migrate(); see the version-6
 // comment there.
 const INITIAL_ACTIVE_RANGE = { size: 2 };
 const deps: Dependencies = { random: Math.random, now: Date.now };
@@ -43,13 +43,13 @@ function dayCount(n: number): string {
 
 // How long the inline-celebration overlay stays up before fading on its
 // own, and how long the plain wrong-Attempt flash stays up. Neither of
-// these gates progress - the inline overlay is purely cosmetic (the next
+// these gates progress. The inline overlay is purely cosmetic (the next
 // Fact is already live underneath it), and the wrong-Attempt overlay is a
 // brief "not quite" flash, not the mechanism that shows the correct
 // answer: the prompt shows that continuously in "correcting" mode,
 // underneath, for as long as the retype takes (and withholds it
-// entirely during the Retry that now comes first - docs/adr/0007). Takeover Celebrations
-// (below) deliberately have no such timer - see dismissTakeover.
+// entirely during the Retry that now comes first; docs/adr/0007). Takeover Celebrations
+// (below) deliberately have no such timer; see dismissTakeover.
 // Shortened from 1200ms once the Celebration overlay became opaque: it
 // now genuinely hides the next Fact while it's up, so its duration is
 // dead time in a drill whose whole target is a ~2.5s answer. Any keypress
@@ -71,9 +71,9 @@ function celebrationText(celebration: Celebration, streakCount: number): string 
 }
 
 // The issue's feedback-matrix table maps each Celebration kind to exactly
-// one sound - kept as its own lookup (rather than folded into
+// one sound. Kept as its own lookup (rather than folded into
 // celebrationText) since audio and overlay/takeover text are triggered at
-// different moments for a takeover (queued vs. shown - see
+// different moments for a takeover (queued vs. shown; see
 // syncTakeoverDisplay).
 function soundForCelebration(kind: CelebrationKind): SoundKind {
   switch (kind) {
@@ -152,9 +152,9 @@ getEl<HTMLDivElement>("app").innerHTML = `
   </section>
 
   <!-- Shown only mid-"Join existing", and only when this device already
-       has its own non-trivial practice history - joining a Profile
+       has its own non-trivial practice history. Joining a Profile
        replaces this device's history with the shared one (there is one
-       Learner, not two histories to merge - docs/adr/0006), so this is
+       Learner, not two histories to merge; docs/adr/0006), so this is
        the one irreversible-feeling moment in the whole sync feature that
        gets an explicit confirmation rather than happening silently. -->
   <div class="modal-confirm" id="sync-confirm" hidden role="dialog" aria-modal="true">
@@ -166,7 +166,7 @@ getEl<HTMLDivElement>("app").innerHTML = `
   </div>
 
   <!-- Shown when a Fact has sat unanswered past MAX_RESPONSE_MS
-       (engine.ts) - long enough that the Learner may have walked away
+       (engine.ts), long enough that the Learner may have walked away
        mid-question rather than just being slow. Confirming restarts the
        clock (screen.ts's restartFactTimer) so idle time at home doesn't
        get billed to the answer once it finally comes. -->
@@ -266,7 +266,7 @@ getEl<HTMLDivElement>("app").innerHTML = `
   </section>
 
   <!-- Lives outside the three routed <section>s, same reasoning as
-       .takeover below - which screens it's allowed on is a JS-owned rule
+       .takeover below: which screens it's allowed on is a JS-owned rule
        (updateBannerVisibility), not something a fixed position in the
        markup could express, since it's shown on two of the three routes
        (map, stats) and deliberately never the quiz: nothing should
@@ -276,8 +276,8 @@ getEl<HTMLDivElement>("app").innerHTML = `
   </div>
 
   <!-- ticket #13: the takeover for range-expansion and Milestone Celebrations
-       (CONTEXT.md's Celebration entry - "fills the screen and waits for the
-       Learner to dismiss it"). Lives outside the three routed <section>s -
+       (CONTEXT.md's Celebration entry: "fills the screen and waits for the
+       Learner to dismiss it"). Lives outside the three routed <section>s.
        data-visible, not the route, controls whether it's shown, since it
        can cover whichever screen the Learner was on when the Attempt
        landed (always the quiz screen in practice). -->
@@ -373,14 +373,14 @@ let idleCheckArmedFor: number | undefined;
 
 // The queue of takeover-tagged Celebrations waiting to be shown
 // (celebrationQueue.ts) plus which one, if any, is currently rendered
-// into the takeover DOM - held separately so syncTakeoverDisplay can tell
+// into the takeover DOM, held separately so syncTakeoverDisplay can tell
 // "still the same takeover, don't re-show/re-play it" apart from "a new
 // one just became current" purely by reference equality, without a
 // second identity scheme.
 //
 // Seeded at boot (rather than always starting empty) with any
 // range-expansion takeover this save reached but never actually got
-// dismissed for - see engine.ts's acknowledgedRangeSize and
+// dismissed for; see engine.ts's acknowledgedRangeSize and
 // celebrationQueue.ts's missedRangeExpansionTakeovers. Ahead of
 // syncTakeoverDisplay's first real call (applyRoute, below), so a
 // catch-up takeover renders on the very first paint rather than needing
@@ -392,14 +392,14 @@ let takeoverQueue: TakeoverQueue = missedRangeExpansionTakeovers(
 let displayedTakeover: Celebration | undefined;
 
 // The Progress map's progress-to-expansion readout is monotonic within a
-// session (ticket #11) - this is that session's high-water mark, held in
+// session (ticket #11). This is that session's high-water mark, held in
 // memory only (not persisted) so it naturally resets on the next page
 // load rather than surviving across days.
 let progressHighWaterMark: ProgressHighWaterMark | null = null;
 
 // The one way to hand the app a *different Learner's* EngineState
 // (switching Profiles, starting a new one, joining one). The high-water
-// mark above is per-Learner - it's keyed by Active range size only, so
+// mark above is per-Learner. It's keyed by Active range size only, so
 // left alone it would clamp the next Learner's "N to go" against the
 // previous Learner's best masteredCount whenever both sit at the same
 // range size (ticket #17). Same-Profile updates arriving from another
@@ -415,8 +415,8 @@ function persist() {
 
   // Mirrors just this one DayKey into IndexedDB (reminderStore.ts) so the
   // service worker's periodicsync handler can tell whether today's
-  // practice has already happened without an open page to ask -
-  // fire-and-forget, same as the rest of persistence here never blocking
+  // practice has already happened without an open page to ask.
+  // Fire-and-forget, same as the rest of persistence here never blocking
   // on I/O completing.
   const { lastActivityDay } = quizState.engine.streak;
   if (lastActivityDay !== null) void setLastActivityDay(lastActivityDay);
@@ -426,14 +426,14 @@ function persist() {
 //
 // Entirely additive on top of everything above: localStorage (persist(),
 // loadState() at boot) stays the always-present, synchronous, zero-
-// network local save exactly as it's always been - this section only
+// network local save exactly as it's always been. This section only
 // bolts a Firestore mirror of the `engine` field on top, active only
 // once this device has paired with a Profile (profilePairing.ts).
 // `lastMapShownDay`/`muted`/`remindersEnabled` never appear here; they
 // stay device-local (see the ADR for why).
 //
-// cloudSync.ts is loaded via a dynamic import - never a static one - so
-// Firebase's SDK is only ever downloaded by a device that actually turns
+// cloudSync.ts is loaded via a dynamic import, never a static one, so
+// Firebase's SDK is only ever downloaded by a device that turns
 // sync on (see the ADR's "new runtime dependency" section).
 let cloudSyncModule: typeof import("./cloudSync") | undefined;
 
@@ -441,16 +441,16 @@ function loadCloudSync(): Promise<typeof import("./cloudSync")> {
   return (cloudSyncModule ? Promise.resolve(cloudSyncModule) : import("./cloudSync")).then((mod) => (cloudSyncModule = mod));
 }
 
-// A remote engine state waiting to be reconciled in - set whenever a
-// genuine (non-echo) snapshot arrives, cleared once actually applied.
+// A remote engine state waiting to be reconciled in. Set whenever a
+// real (non-echo) snapshot arrives, cleared once applied.
 let pendingRemoteEngineState: EngineState | undefined;
 
 // Swaps in a pending remote update if one exists and it's currently safe
-// to do so (syncDecisions.shouldApplyRemoteUpdate) - never while the
-// Learner is live on the quiz route. Returns whether it actually applied
+// to do so (syncDecisions.shouldApplyRemoteUpdate), never while the
+// Learner is live on the quiz route. Returns whether it applied
 // anything, so callers know whether a re-render is warranted. Mirrors
 // the merged result back into localStorage (persist()) so this device's
-// own next boot already reflects it - never pushes back to the cloud,
+// own next boot already reflects it. Never pushes back to the cloud,
 // since Firestore is already the source this data came from.
 function applyPendingRemoteUpdate(route: Route): boolean {
   if (!pendingRemoteEngineState || !shouldApplyRemoteUpdate(route)) return false;
@@ -463,30 +463,30 @@ function applyPendingRemoteUpdate(route: Route): boolean {
 
 // The live-subscription callback (cloudSync.subscribeToProfile). Runs
 // whenever this Profile's document changes, whether from this device's
-// own write settling or a genuinely different one from elsewhere.
+// own write settling or a different one from elsewhere.
 function handleRemoteSnapshot(data: Record<string, unknown> | undefined, meta: { hasPendingWrites: boolean }) {
   if (!data || !isRemoteUpdate(meta)) return;
 
   const engine = parseEngineState(data);
-  if (!engine) return; // a malformed/partial document - nothing safe to reconcile against
+  if (!engine) return; // a malformed/partial document; nothing safe to reconcile against
 
   pendingRemoteEngineState = engine;
   const route = routeFromHash(window.location.hash);
   // Applied outside the normal applyRoute flow (nothing navigated us
-  // here), so re-render explicitly - applyRoute's own leading check
+  // here), so re-render explicitly. applyRoute's own leading check
   // will find pendingRemoteEngineState already cleared and just render.
   if (applyPendingRemoteUpdate(route)) applyRoute(route);
 }
 
-// Pushes this device's current engine state to the cloud - called after
-// every genuine local Attempt (handleEnter), never after a device-local
+// Pushes this device's current engine state to the cloud. Called after
+// every real local Attempt (handleEnter), never after a device-local
 // settings change (mute/reminders). Silently a no-op on a device that
-// hasn't paired with a Profile - the overwhelming majority of installs.
+// hasn't paired with a Profile, the overwhelming majority of installs.
 function pushEngineStateToCloud() {
   const profile = activeProfile();
   if (!profile) return;
   // writeProfile is a whole-document replace (ADR 0006), so the label has
-  // to ride along on every single write, not just the first - otherwise
+  // to ride along on every single write, not just the first. Otherwise
   // the very next Attempt after naming a Profile would silently wipe the
   // name back out.
   void loadCloudSync().then((mod) => mod.writeProfile(profile.profileId, { ...quizState.engine, label: profile.label }));
@@ -506,7 +506,7 @@ function startSyncing(profileId: string) {
 }
 
 // A shareable link rather than a bare Profile ID, so pairing is "paste
-// what your other phone sent you" - route.ts's joinProfileIdFromHash
+// what your other phone sent you". route.ts's joinProfileIdFromHash
 // (and this function's own input-parsing counterpart below) is the only
 // place that knows this shape.
 function pairingLinkForProfile(profileId: string): string {
@@ -525,9 +525,9 @@ function profileIdFromPastedText(raw: string): string | null {
 }
 
 // "Non-trivial" mirrors docs/adr/0006's replace-not-merge rule: a device
-// that has never actually been practiced on (a brand-new install, or one
+// that has never been practiced on (a brand-new install, or one
 // that's only ever sat on the map screen) has nothing worth confirming
-// before replacing - the confirmation exists to protect real history,
+// before replacing. The confirmation exists to protect real history,
 // not to add a click to every join.
 function hasNonTrivialLocalProgress(engine: EngineState): boolean {
   return Object.keys(engine.fluency).length > 0 || engine.streak.count > 0;
@@ -538,7 +538,7 @@ function showSyncHint(text: string) {
   syncHintEl.hidden = false;
 }
 
-// Reflects the current pairing state into the sync panel - called
+// Reflects the current pairing state into the sync panel. Called
 // whenever it changes (start sharing, join, switch, stop) and whenever
 // the panel is opened, the same "render wherever the state can change"
 // pattern renderMuteToggle/renderReminderToggle already use.
@@ -546,7 +546,7 @@ function renderSyncPanel() {
   const profile = activeProfile();
 
   // Never leave a stale QR (or "Hide QR code" label) on screen for a
-  // Profile that's no longer active - e.g. after switching or stopping
+  // Profile that's no longer active, e.g. after switching or stopping
   // sync. Cheap to always reset here rather than track "which Profile is
   // this QR actually for."
   qrCodeWrapEl.hidden = true;
@@ -574,7 +574,7 @@ function renderSyncPanel() {
 // One pill row doing double duty as the Profile switcher and the
 // "start a new Profile" entry point, rather than two separately-shown
 // blocks (a standalone "Start a new profile" button plus a switcher
-// that only ever appeared once a second Profile already existed) - see
+// that only ever appeared once a second Profile already existed); see
 // docs/adr/0006's "Profile, not Household" section for why a device can
 // end up paired with more than one. Always shown whenever this device
 // is paired with at least one, even just its own.
@@ -611,7 +611,7 @@ function labelFromDocument(data: Record<string, unknown>): string {
   return typeof data.label === "string" && data.label.trim() ? data.label : "Shared progress";
 }
 
-// Switching, unlike joining, never needs the replace-confirmation - a
+// Switching, unlike joining, never needs the replace-confirmation. A
 // device already paired with both Profiles has already agreed (at join
 // time) to let sync own its state, so there's no "first time" local
 // history at risk of a surprise replace.
@@ -630,9 +630,9 @@ async function switchToProfile(profileId: string): Promise<void> {
 
 // Unlike "Start sharing" (which publishes *this device's* current
 // progress so another device can join it), this is for a second Learner
-// starting from nothing: a genuinely fresh EngineState goes up as a new
+// starting from nothing: a fresh EngineState goes up as a new
 // Profile, this device pairs with it and switches over, and the
-// previous Profile stays paired - one tap away in the switcher above -
+// previous Profile stays paired (one tap away in the switcher above)
 // rather than being replaced or left behind.
 async function startNewProfile(rawLabel: string): Promise<void> {
   const label = rawLabel.trim();
@@ -660,7 +660,7 @@ async function startNewProfile(rawLabel: string): Promise<void> {
 }
 
 // Turns this device's own current progress into a shareable Profile for
-// the first time - unlike "Start a new profile", the EngineState that
+// the first time. Unlike "Start a new profile", the EngineState that
 // goes up is whatever's already here, not a fresh one.
 async function startSharing(rawLabel: string): Promise<void> {
   const label = rawLabel.trim();
@@ -674,7 +674,7 @@ async function startSharing(rawLabel: string): Promise<void> {
   // Awaited deliberately, unlike pushEngineStateToCloud's ongoing
   // fire-and-forget pushes: the whole point of this one-time upload is
   // that the link is immediately shareable, so this waits for the
-  // backend to actually confirm it rather than assuming success.
+  // backend to confirm it rather than assuming success.
   const success = await mod.writeProfile(profileId, { ...quizState.engine, label });
   if (!success) {
     showSyncHint("Couldn't reach the sync service - check your connection and try again.");
@@ -711,7 +711,7 @@ function showJoinConfirm(local: EngineState, remote: EngineState) {
   syncConfirmEl.hidden = false;
 }
 
-// The entry point for "Join existing" - fetches whatever's actually
+// The entry point for "Join existing". Fetches whatever's
 // there first rather than assuming, since a mistyped/stale link should
 // fail honestly rather than silently pairing to nothing.
 async function beginJoin(profileId: string): Promise<void> {
@@ -740,12 +740,12 @@ async function beginJoin(profileId: string): Promise<void> {
   completeJoin(profileId, remoteEngine, label);
 }
 
-// Builds one 12x12 grid of cells - shared by the Progress map's own grid
+// Builds one 12x12 grid of cells, shared by the Progress map's own grid
 // and, unchanged, by the range-expansion takeover below (ticket #13:
 // "reuse the Progress map's 12x12 grid rendering rather than inventing a
 // second grid visual" / ADR 0004's one-shared-grid-shape precedent).
-// `newSize`, when given, is the range size an expansion just reached -
-// the newly filled row (a === newSize) and column (b === newSize) get
+// `newSize`, when given, is the range size an expansion just reached.
+// The newly filled row (a === newSize) and column (b === newSize) get
 // `grid-cell--new` so CSS can animate them filling in, staggered via
 // `--reveal-delay` in the order the takeover fills them: across the new
 // row first, then down the new column.
@@ -787,16 +787,16 @@ function progressReadoutText(readout: ProgressReadout): string {
 }
 
 // The mute toggle (ticket #13: "the toggle lives on the Progress map
-// only, never on the quiz screen - a mute button within reach of a
+// only, never on the quiz screen; a mute button within reach of a
 // fast-tapping thumb gets hit by accident"). Rendered wherever `muted`
-// can change - on the initial map render and right after the button's
-// own click - rather than only once at startup.
+// can change (on the initial map render and right after the button's
+// own click) rather than only once at startup.
 function renderMuteToggle() {
   muteToggleEl.textContent = muted ? "🔇 Sound off" : "🔊 Sound on";
   muteToggleEl.setAttribute("aria-pressed", String(muted));
 }
 
-// Mirrors renderMuteToggle's pattern - rendered wherever remindersEnabled
+// Mirrors renderMuteToggle's pattern: rendered wherever remindersEnabled
 // can change (the initial map render and right after the toggle's own
 // click).
 function renderReminderToggle() {
@@ -821,21 +821,21 @@ function renderMap() {
 
   if (status.readout.kind === "remaining") {
     // "The current frontier row/column is where the progress-to-expansion
-    // indicator lives" (ticket #11) - anchor it at the boundary corner
+    // indicator lives" (ticket #11), so anchor it at the boundary corner
     // where the filled square ends and the next row/column begins,
     // rather than as a generic caption under the grid.
     const frontierPercent = (engine.activeRange.size / MAX_ACTIVE_RANGE_SIZE) * 100;
     progressReadoutEl.style.left = `${frontierPercent}%`;
     progressReadoutEl.style.top = `${frontierPercent}%`;
   } else {
-    // No frontier left to point at once the grid is full - the
+    // No frontier left to point at once the grid is full, so the
     // maintenance readout sits in its normal place under the grid.
     progressReadoutEl.style.left = "";
     progressReadoutEl.style.top = "";
   }
 }
 
-// Ticket #12's statistics grids - a class name per off-ramp CellState
+// Ticket #12's statistics grids: a class name per off-ramp CellState
 // (ADR 0004), plus a shared "provisional" modifier for the dashed ring
 // so a 1-2-Attempt Fact still gets its real bucket color underneath.
 function statsCellClass(state: CellState): string {
@@ -853,7 +853,7 @@ function statsCellClass(state: CellState): string {
 
 // Builds one 12x12 grid of cell buttons. `varPrefix` picks which ramp's
 // CSS custom properties (--acc-1..5 or --fluency-1..5, style.css) a
-// "value" cell's bucket resolves to - the bucket→color mapping itself
+// "value" cell's bucket resolves to. The bucket→color mapping itself
 // lives entirely in CSS so light/dark mode swap for free (ADR 0004:
 // dark steps are their own validated set, not the light ramp flipped).
 function buildStatsGrid(container: HTMLDivElement, varPrefix: "acc" | "fluency", classify: (fact: Fact) => CellState) {
@@ -874,7 +874,7 @@ function buildStatsGrid(container: HTMLDivElement, varPrefix: "acc" | "fluency",
       }
 
       // Per-Fact numbers live in the tap/hover tooltip, never in the cell
-      // itself (ADR 0004) - the same text also backs the accessible name,
+      // itself (ADR 0004). The same text also backs the accessible name,
       // so a screen reader gets exactly what a sighted hover/tap gets.
       const text = factTooltipText(fact, engine, now);
       cell.setAttribute("aria-label", text);
@@ -919,7 +919,7 @@ function hideStatsTooltip() {
 function renderStats() {
   const { engine } = quizState;
 
-  // Header is days practiced and current Streak ONLY (ticket #12) - no
+  // Header is days practiced and current Streak ONLY (ticket #12). No
   // total-Attempts figure, no time-series chart.
   const days = engine.practiceDayCount;
   statsDaysEl.textContent = `Practiced: ${dayCount(days)}`;
@@ -948,13 +948,13 @@ function renderQuiz() {
   }
 
   if (quizState.mode === "correcting") {
-    // The correct answer is shown outright - the Learner isn't being
+    // The correct answer is shown outright. The Learner isn't being
     // quizzed again, they're retyping to practice it. Nothing here feeds
     // Fluency (CONTEXT.md), so there's no idle-check to arm.
     promptEl.textContent = `${quizState.wrongFact.a} × ${quizState.wrongFact.b} = ${quizState.correctAnswer}`;
     disarmIdleCheck();
   } else if (quizState.mode === "retrying") {
-    // Same Fact, still asking - the answer is deliberately withheld for
+    // Same Fact, still asking. The answer is deliberately withheld for
     // one more try. No idle-check either: a Retry is untimed by
     // design (it's the thinking time the reveal used to cut short), so
     // there's no response clock for a walk-away to spoil.
@@ -969,11 +969,11 @@ function renderQuiz() {
 }
 
 // Checks in after a Fact has sat unanswered past MAX_RESPONSE_MS
-// (engine.ts) - long enough that the Learner may have walked away rather
+// (engine.ts), long enough that the Learner may have walked away rather
 // than just being slow. Re-arms relative to `factShownAt` itself (not
-// "now") so repeated re-renders that don't change it - a keypress, a
-// stats-tooltip dismissal - never restart the countdown; only an actual
-// new Fact or a genuine restartFactTimer (below) does.
+// "now") so repeated re-renders that don't change it (a keypress, a
+// stats-tooltip dismissal) never restart the countdown; only a new Fact
+// or a real restartFactTimer (below) does.
 function updateIdleCheck() {
   if (quizState.mode !== "answering") return;
   const { factShownAt } = quizState;
@@ -1024,7 +1024,7 @@ function hideOverlay() {
   if (factCovered) {
     factCovered = false;
     // The Fact was hidden behind an opaque Celebration, so its clock was
-    // running through a window the Learner couldn't read it in - the same
+    // running through a window the Learner couldn't read it in, the same
     // defect the takeover queue has (see restartFactTimer). Start it from
     // the moment the Fact actually becomes readable.
     quizState = restartFactTimer(quizState, deps);
@@ -1035,7 +1035,7 @@ function hideOverlay() {
 // The Learner touching the keypad ends the previous Attempt's overlay
 // immediately, whatever time it had left. The overlay sits on top of the
 // typed answer as well as the prompt, so leaving it up means the digit
-// that was just pressed is washed out along with everything else - which
+// that was just pressed is washed out along with everything else, which
 // reads as "my typing isn't doing anything" and invites a re-tap. The
 // input was always being accepted; it just wasn't visibly landing.
 function handleDigit(digit: string) {
@@ -1050,14 +1050,14 @@ function handleBackspace() {
   renderQuiz();
 }
 
-// Plays and shows every inline Celebration from the set at once - "plays
+// Plays and shows every inline Celebration from the set at once: "plays
 // simultaneously" per CONTEXT.md, which for the sounds means literally
 // overlapping playSound calls, and for the overlay means the first (in
-// practice the only - engine.ts pushes exactly one of correctness-only /
+// practice the only; engine.ts pushes exactly one of correctness-only /
 // personal-best per Attempt, never both) heads the on-screen text. A
 // future inline kind that fires alongside another would still get its
 // own sound from the loop below even though only one gets the overlay
-// text - sound is never silently dropped, only the headline text picks
+// text. Sound is never silently dropped; only the headline text picks
 // one.
 function playInlineCelebrations(celebrations: Celebration[], streakCount: number) {
   if (celebrations.length === 0) return;
@@ -1068,11 +1068,11 @@ function playInlineCelebrations(celebrations: Celebration[], streakCount: number
 }
 
 // Renders whichever takeover is now at the front of `takeoverQueue`, or
-// hides the takeover entirely once the queue drains - and does nothing at
-// all if the front of the queue hasn't actually changed since last call,
+// hides the takeover entirely once the queue drains, and does nothing at
+// all if the front of the queue hasn't changed since last call,
 // so re-running this after every enqueue/dismiss never re-triggers the
 // sound or restarts the reveal animation for a takeover already on
-// screen. This is the only place a takeover's sound plays - deliberately
+// screen. This is the only place a takeover's sound plays, deliberately
 // at display time, not at the moment the underlying Attempt happened, so
 // two queued takeovers each get their own sound in turn rather than both
 // firing at once up front.
@@ -1086,7 +1086,7 @@ function syncTakeoverDisplay() {
     document.body.dataset.takeover = "false";
     // The queue has drained, so the Learner can finally answer. Start
     // the Fact's timer from here rather than from the Attempt that
-    // raised the takeover - see restartFactTimer in screen.ts.
+    // raised the takeover; see restartFactTimer in screen.ts.
     quizState = restartFactTimer(quizState, deps);
     return;
   }
@@ -1095,13 +1095,13 @@ function syncTakeoverDisplay() {
   takeoverTitleEl.textContent = celebrationText(current, quizState.engine.streak.count);
   if (current.kind === "range-expansion" && current.rangeSize !== undefined) {
     // Reads the size off the Celebration itself, not live off
-    // quizState.engine.activeRange.size - a boot-time catch-up
+    // quizState.engine.activeRange.size, since a boot-time catch-up
     // (missedRangeExpansionTakeovers) can replay several past
     // expansions in sequence, each needing to show the grid as it
     // looked at that exact moment, not wherever the Learner has since
     // progressed to. The engine only ever grows the Active range one
     // step at a time (nextActiveRange), so the reached size IS the
-    // newly-filled row/column - no separate pre-expansion size needed.
+    // newly-filled row/column, so no separate pre-expansion size is needed.
     buildProgressGrid(takeoverGridEl, current.rangeSize, current.rangeSize);
   }
   takeoverEl.dataset.visible = "true";
@@ -1116,7 +1116,7 @@ function syncTakeoverDisplay() {
   playSound(soundForCelebration(current.kind));
 }
 
-// The Learner's tap (or Enter/Space from a keyboard - see the keydown
+// The Learner's tap (or Enter/Space from a keyboard; see the keydown
 // handler below) advancing past the current takeover. Never on a timer:
 // the issue is explicit that auto-dismiss risks the Learner missing the
 // best moment in the app by looking away at the wrong instant, and that
@@ -1124,12 +1124,12 @@ function syncTakeoverDisplay() {
 // correct behavior a timer would only get in the way of.
 //
 // A real bug this guards against: the takeover is often raised by Enter,
-// which - on touch - is handled on pointerdown (see the keypad listener
+// which, on touch, is handled on pointerdown (see the keypad listener
 // below) so it can appear the instant the finger lands, synchronously
 // hiding the keypad underneath. The same physical tap still produces a
 // trailing `click` a moment later, and a browser computes *that* click's
 // target from the DOM as it looks at dispatch time, not from where the
-// finger actually was - which is now this takeover, freshly covering
+// finger was, which is now this takeover, freshly covering
 // that exact spot. Left unguarded, the takeover dismisses itself within
 // the same tap that raised it, before a Learner ever sees it.
 //
@@ -1137,15 +1137,15 @@ function syncTakeoverDisplay() {
 // became visible" timer: that variable is only ever set by a touch/pen
 // pointerdown, never a mouse click, so this only ever delays a dismissal
 // that's plausibly the ghost click trailing that same touch gesture. A
-// mouse dismissal - which was never at risk of this in the first place,
-// since mouse input never takes the pointerdown path below - is never
+// mouse dismissal (which was never at risk of this in the first place,
+// since mouse input never takes the pointerdown path below) is never
 // held up, however immediately it happens.
 function dismissTakeover() {
   const current = currentTakeover(takeoverQueue);
   if (!current) return;
   if (performance.now() - lastPointerHandledAt < 500) return;
 
-  // The dismissal itself is the acknowledgment - see engine.ts's
+  // The dismissal itself is the acknowledgment; see engine.ts's
   // acknowledgedRangeSize and this queue's own boot-time seeding above.
   // Persisted immediately (not batched into the next Attempt's persist())
   // so a dismissed-but-not-yet-re-earned takeover can never come back on
@@ -1165,7 +1165,7 @@ function dismissTakeover() {
 
 // The Learner confirming "still there" after MAX_RESPONSE_MS (engine.ts)
 // restarts the clock exactly like returning to the quiz from elsewhere
-// (applyRoute) or a takeover clearing (hideOverlay) - all three are the
+// (applyRoute) or a takeover clearing (hideOverlay). All three are the
 // same underlying case: time passed that the Fact's clock shouldn't be
 // charged for.
 function confirmStillThere() {
@@ -1195,15 +1195,15 @@ function handleEnter() {
       persist();
       pushEngineStateToCloud();
       // The wrong-answer sound: a soft low tone, never a buzzer (the
-      // issue's central commitment - the Learner is nine). Plays every
+      // issue's central commitment; the Learner is nine). Plays every
       // time, independent of whether this Attempt also carries a
       // takeover Celebration (e.g. a Milestone can complete on a wrong
-      // Attempt - Streak advances regardless of correctness).
+      // Attempt; Streak advances regardless of correctness).
       playSound("wrong");
       // A brief flash, not a persistent cover: the correct answer itself
       // is shown by renderQuiz() in the prompt for the whole "correcting"
       // mode, so the overlay must not sit on top of it for the duration
-      // of the retype - that would hide the very thing the Learner is
+      // of the retype. That would hide the very thing the Learner is
       // meant to read and copy. No inline Celebrations are ever produced
       // by an incorrect outcome (engine.ts only pushes correctness-only /
       // personal-best on the correct path), so this never competes with
@@ -1218,14 +1218,14 @@ function handleEnter() {
       break;
     case "retry-incorrect":
       // Second miss: the answer comes out now. No engine change to
-      // persist and no Attempt recorded - the Fact was measured once, on
-      // the first Enter - so this is purely the handover into retyping.
+      // persist and no Attempt recorded (the Fact was measured once, on
+      // the first Enter), so this is purely the handover into retyping.
       playSound("wrong");
       showOverlay("Not quite — type the answer to continue", "none", WRONG_ANSWER_FLASH_MS);
       break;
     case "retry-correct":
       // Recalled without being shown the answer. Worth the correct sound
-      // and a word of encouragement - but not a Celebration: the engine
+      // and a word of encouragement, but not a Celebration: the engine
       // recorded a wrong Attempt for this Fact and nothing here changes
       // that, so there's nothing to persist or push either.
       playSound("correct");
@@ -1235,7 +1235,7 @@ function handleEnter() {
       hideOverlay();
       break;
     case "correction-mismatch":
-      // No engine change, no state to persist - just let the Learner
+      // No engine change, no state to persist. Just let the Learner
       // keep retyping (they can backspace their mistake).
       break;
   }
@@ -1244,7 +1244,7 @@ function handleEnter() {
 }
 
 // iOS Safari only applies the CSS `:active` pseudo-class to a tap when
-// something on the page has a touchstart listener bound - otherwise every
+// something on the page has a touchstart listener bound. Otherwise every
 // `:active` rule (the keypad's pressed-state feedback) is silently inert
 // on a phone. This listener does nothing itself; it exists purely to
 // switch that behavior on.
@@ -1262,29 +1262,29 @@ function handleKeypadTarget(target: HTMLElement) {
 }
 
 // A tap that visibly registers (the `:active` flash fires) but never
-// produces a `click` is a real, reported failure mode - even with
+// produces a `click` is a real, reported failure mode. Even with
 // touch-action: manipulation, a mobile browser can still decide, after
 // the fact, not to synthesize a click for a touch it accepted. pointerdown
 // fires unconditionally the instant the touch lands, so touch/pen input
 // acts on that directly instead of ever waiting on a click that might not
 // come. Mouse (and a keyboard/assistive-tech "activate", which dispatches
 // a genuine pointer sequence with its own pointerdown) are left on the
-// click listener below - untouched, and not part of the failure this is
+// click listener below, untouched, and not part of the failure this is
 // fixing.
 //
 // `pointerEvent.preventDefault()` alone is not enough to stop the click
 // that follows: the Pointer Events spec only guarantees it suppresses
 // the compatibility *mouse* events, and Chromium (confirmed here by a
-// real-touch e2e test - a mouse-driven `.click()` never exercises this
+// real-touch e2e test; a mouse-driven `.click()` never exercises this
 // path) still synthesizes `click` for a touch tap regardless. A short
-// time-window guard on the click handler is what actually prevents the
+// time-window guard on the click handler is what prevents the
 // same tap from entering its digit twice.
 //
 // The guard's sentinel is -Infinity, not 0: performance.now() starts
 // near zero at page load, so a tap in the first moments of a fresh page
 // would otherwise compute `performance.now() - 0` as itself under
 // 500ms and get wrongly treated as a just-handled pointerdown's
-// trailing click, even though no pointerdown had actually run yet.
+// trailing click, even though no pointerdown had run yet.
 let lastPointerHandledAt = -Infinity;
 
 keypadEl.addEventListener("pointerdown", (pointerEvent) => {
@@ -1305,11 +1305,11 @@ keypadEl.addEventListener("click", (clickEvent) => {
 
 takeoverEl.addEventListener("click", dismissTakeover);
 
-// The physical keyboard keeps working - it costs almost nothing to wire
+// The physical keyboard keeps working. It costs almost nothing to wire
 // up and it's how this screen gets tested. A visible takeover intercepts
 // Enter/Space as its own dismissal first (and swallows every other key)
 // so a Learner tabbing/typing through a takeover can never leak input
-// through to the quiz underneath - the whole point of "takeovers require
+// through to the quiz underneath. The whole point of "takeovers require
 // a tap to dismiss and never auto-advance" is that nothing else can move
 // the Attempt along while one is up. Below that, key handling is guarded
 // to the quiz route so typing on the map or stats screen (e.g. tabbing
@@ -1374,11 +1374,11 @@ function showReminderHint(text: string) {
 }
 
 // Turning the reminder off never fails (there's nothing to be denied),
-// but turning it on can fail several ways - permission refused, the
+// but turning it on can fail several ways: permission refused, the
 // browser lacking Periodic Background Sync entirely, or Chrome's own
-// site-engagement heuristic rejecting the registration - and in every
+// site-engagement heuristic rejecting the registration. In every
 // failing case this leaves remindersEnabled false and says why, rather
-// than showing "On" for a reminder that will never actually fire.
+// than showing "On" for a reminder that will never fire.
 reminderToggleEl.addEventListener("click", () => {
   void (async () => {
     if (remindersEnabled) {
@@ -1451,7 +1451,7 @@ copySyncLinkButtonEl.addEventListener("click", () => {
 });
 
 // A phone's camera app decodes a URL-shaped QR straight into "open this
-// link" - which lands on the join flow (route.ts's joinProfileIdFromHash)
+// link", which lands on the join flow (route.ts's joinProfileIdFromHash)
 // with no typing/pasting step at all, unlike "Copy sync link". Toggle
 // rather than a one-shot reveal, matching the sync panel's own
 // open/closed button; qrcode-generator is loaded lazily here too (see
@@ -1475,7 +1475,7 @@ showQrButtonEl.addEventListener("click", () => {
   })();
 });
 
-// Detaches this device from its Profile - the Profile itself, and any
+// Detaches this device from its Profile. The Profile itself, and any
 // other device synced to it, are untouched. This device's own local
 // progress is left exactly as it currently stands (not erased), just no
 // longer pushed to or pulled from the cloud.
@@ -1507,7 +1507,7 @@ syncConfirmNoEl.addEventListener("click", () => {
 
 // Chrome/Android fires this instead of showing its own install banner
 // when the page calls preventDefault() on it, handing control of exactly
-// when/how to prompt to the app - stashed here and used by the install
+// when/how to prompt to the app. Stashed here and used by the install
 // button's click handler below. Safari has no such event at all (see the
 // iOS hint instead).
 let deferredInstallPrompt: Event | null = null;
@@ -1527,14 +1527,14 @@ installButtonEl.addEventListener("click", () => {
 });
 
 // Fires once the Learner actually installs (via the button above, or
-// Chrome's own menu) - the deferred prompt is spent either way, and
+// Chrome's own menu). The deferred prompt is spent either way, and
 // there's nothing left to offer.
 window.addEventListener("appinstalled", () => {
   installButtonEl.hidden = true;
   deferredInstallPrompt = null;
 });
 
-// iOS Safari has no beforeinstallprompt/appinstalled events at all - the
+// iOS Safari has no beforeinstallprompt/appinstalled events at all. The
 // only "Add to Home Screen" path there is the manual Share-sheet one, so
 // this shows a static instruction instead of a button when running on an
 // iPhone/iPad that isn't already installed.
@@ -1546,7 +1546,7 @@ if (isIOS && !isStandalone) {
   iosInstallHintEl.hidden = false;
 }
 
-// Shown once a newer deployed version has activated in the background -
+// Shown once a newer deployed version has activated in the background.
 // sw.ts calls self.skipWaiting() unconditionally, so a new version takes
 // over as *the* active worker without ever waiting on this tab, but
 // without clients.claim() it still doesn't take over *this already-open
@@ -1557,7 +1557,7 @@ let updateAvailable = false;
 
 function updateBannerVisibility() {
   const route = routeFromHash(window.location.hash);
-  // Never the quiz (or the unlisted reset screen) - nothing should
+  // Never the quiz (or the unlisted reset screen). Nothing should
   // compete for attention mid-question, and there's no rush: the update
   // is already sitting there activated, waiting for whenever the Learner
   // next lands on the map or stats.
@@ -1574,8 +1574,8 @@ if ("serviceWorker" in navigator) {
       registration.addEventListener("updatefound", () => {
         const installing = registration.installing;
         if (!installing) return;
-        // A controller already existed *before* this new worker showed up
-        // - i.e. this is a real update replacing one already serving the
+        // A controller already existed *before* this new worker showed up,
+        // i.e. this is a real update replacing one already serving the
         // page, not this tab's own first-ever install (which also runs
         // through "installing" -> "activated" but has nothing to update
         // away from).
@@ -1588,14 +1588,14 @@ if ("serviceWorker" in navigator) {
         });
       });
 
-      // The registration itself doesn't re-check the network on its own -
-      // registration.update() is what actually asks the server for a
+      // The registration itself doesn't re-check the network on its own.
+      // registration.update() is what asks the server for a
       // fresh copy of sw.js and kicks off "updatefound" if it differs.
       // Deferred past the load event (and an extra beat past that) so
       // this never competes with anything the initial paint needs, then
       // re-checked occasionally rather than on some tight poll: once on
       // returning to the tab (a Learner is most likely to have missed a
-      // deploy after being away a while - throttled so rapid tab
+      // deploy after being away a while; throttled so rapid tab
       // switching can't spam it) plus a periodic fallback for a tab that
       // just stays open.
       const checkForUpdate = () => void registration.update();
@@ -1611,7 +1611,7 @@ if ("serviceWorker" in navigator) {
 
       // Guards against the "load" event having already fired before this
       // listener attaches (a real risk this far down an async .then chain,
-      // not just theoretical) - in which case it would simply never come.
+      // not just theoretical), in which case it would simply never come.
       const scheduleFirstCheck = () => setTimeout(checkIfDue, 5_000);
       if (document.readyState === "complete") {
         scheduleFirstCheck();
@@ -1630,7 +1630,7 @@ if ("serviceWorker" in navigator) {
 }
 
 // The stats legend's swatches are static markup (unlike the grids, never
-// rebuilt), so this wiring runs once rather than per-render - each
+// rebuilt), so this wiring runs once rather than per-render. Each
 // swatch's explanation is baked into its own data-tip rather than looked
 // up, since these don't vary with engine state. Shares the same tooltip
 // element/positioning as the grid cells (showStatsTooltip/hideStatsTooltip
@@ -1647,7 +1647,7 @@ document.querySelectorAll<HTMLButtonElement>(".legend-item").forEach((item) => {
 
 // WebAudio refuses to produce sound until a real user gesture has
 // touched the AudioContext (CONTEXT.md-adjacent browser rule, not a
-// domain one) - tapping "Practice" on the Progress map is the gesture
+// domain one). Tapping "Practice" on the Progress map is the gesture
 // the landing flow supplies for free (the issue body), but a same-day
 // return visit skips the map entirely (route.ts's decideLanding sends it
 // straight to the quiz), so the very first pointerdown/keydown anywhere
@@ -1657,12 +1657,12 @@ practiceLinkEl.addEventListener("click", () => initAudio(), { once: true });
 document.addEventListener("pointerdown", () => initAudio(), { once: true });
 document.addEventListener("keydown", () => initAudio(), { once: true });
 
-// Hash routing between the map, quiz, and stats screens (route.ts) -
+// Hash routing between the map, quiz, and stats screens (route.ts):
 // deliberately just toggling which <section> is visible off of
 // `location.hash`, so the browser/Android back button works for free.
 function applyRoute(route: Route) {
   // Reconcile any remote update that arrived while it wasn't safe to
-  // apply (the Learner was mid-question on the quiz route) - every route
+  // apply (the Learner was mid-question on the quiz route). Every route
   // change is a natural point to catch up, including the very first one
   // at boot.
   applyPendingRemoteUpdate(route);
@@ -1679,14 +1679,14 @@ function applyRoute(route: Route) {
   updateBannerVisibility();
 
   // Arriving at the quiz screen from elsewhere (as opposed to already
-  // being on it) is a fresh "Start practice" - factShownAt must restart
+  // being on it) is a fresh "Start practice". factShownAt must restart
   // here too, or a Learner who leaves the quiz screen idle and comes
   // back has their response time measured from the original visit.
   if (arrivingAtQuiz) quizState = restartFactTimer(quizState, deps);
 
   if (route !== "quiz") {
     // Nothing renders the quiz screen from here on, so nothing will call
-    // updateIdleCheck again - a still-pending timeout would otherwise pop
+    // updateIdleCheck again. A still-pending timeout would otherwise pop
     // the "still there?" dialog while the Learner is looking at another
     // screen entirely (e.g. the Android back button navigating away).
     disarmIdleCheck();
@@ -1704,14 +1704,14 @@ window.addEventListener("hashchange", () => applyRoute(routeFromHash(window.loca
 // Captured before anything below has a chance to overwrite
 // window.location.hash (decideLanding's own landing-hash normalization
 // does exactly that when the requested hash isn't one of its three
-// routes, which "#/join/<id>" never is) - reading this hash again later
+// routes, which "#/join/<id>" never is). Reading this hash again later
 // would silently see "#/map" instead and never notice the join at all.
 const joinProfileId = joinProfileIdFromHash(window.location.hash);
 
 // CONTEXT.md's Progress map landing rule: shown on the first open of
 // each calendar day, straight to the quiz on later opens the same day.
 // Reuses the engine's dayKey (via decideLanding) rather than a second
-// notion of "day". An empty hash - a genuinely fresh open - is passed
+// notion of "day". An empty hash (a fresh open) is passed
 // through as "nothing requested" rather than routeFromHash's own "map"
 // fallback, so decideLanding can tell that apart from a reload that
 // already had an explicit route in the URL (see its own comment).
@@ -1729,25 +1729,25 @@ if (window.location.hash !== landingHash) {
   window.location.hash = landingHash;
 }
 // Surfaces a boot-time catch-up takeover (takeoverQueue's own seeding,
-// above) on the very first paint - every other syncTakeoverDisplay call
+// above) on the very first paint. Every other syncTakeoverDisplay call
 // site runs off the back of a just-submitted Attempt, which hasn't
 // happened yet this early.
 syncTakeoverDisplay();
 applyRoute(landing.route);
 
 // A device that paired with a Profile in an earlier session resumes
-// syncing immediately, with no re-pairing - the whole reason
+// syncing immediately, with no re-pairing, the whole reason
 // profilePairing.ts remembers it locally. The overwhelming majority of
 // installs have never paired with anything, so this is a no-op for them
-// (and Firebase's SDK never even downloads - see loadCloudSync above).
+// (and Firebase's SDK never even downloads; see loadCloudSync above).
 const pairedProfile = activeProfile();
 if (pairedProfile) {
   startSyncing(pairedProfile.profileId);
 }
 
-// A pairing link (route.ts's joinProfileIdFromHash - "#/join/<id>", from
+// A pairing link (route.ts's joinProfileIdFromHash: "#/join/<id>", from
 // "Copy link") is a one-time action, not a screen with its
-// own back-button-navigable state - consumed here once (the hash was
+// own back-button-navigable state. Consumed here once (the hash was
 // already normalized to the map above, as part of the landing decision).
 if (joinProfileId) {
   syncPanelEl.hidden = false;

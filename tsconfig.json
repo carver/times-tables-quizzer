@@ -21,7 +21,7 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
-  // sw.ts runs in a ServiceWorkerGlobalScope, not a Window - it has its
+  // sw.ts runs in a ServiceWorkerGlobalScope, not a Window, so it has its
   // own tsconfig (tsconfig.sw.json, WebWorker lib instead of DOM) so the
   // two `self` typings never collide in one program.
   "exclude": ["src/sw.ts"]

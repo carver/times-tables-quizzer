@@ -57,7 +57,7 @@ describe("takeover queue", () => {
     expect(currentTakeover(queue)).toEqual(rangeExpansion);
   });
 
-  it("drops the inline Celebrations from what gets enqueued - only takeovers queue", () => {
+  it("drops the inline Celebrations from what gets enqueued; only takeovers queue", () => {
     const queue = enqueueTakeovers(EMPTY_TAKEOVER_QUEUE, [correctnessOnly, personalBest]);
 
     expect(queue).toEqual([]);
@@ -123,8 +123,8 @@ describe("missedRangeExpansionTakeovers", () => {
 
   // A Learner who progressed through several grids before a takeover
   // ever got the chance to be dismissed (this file's whole motivating
-  // bug) gets every one of them replayed, in the order actually reached
-  // - not just a single takeover for wherever they ended up.
+  // bug) gets every one of them replayed, in the order reached,
+  // not just a single takeover for wherever they ended up.
   it("returns one takeover per missed size, oldest first, each carrying its own size", () => {
     expect(missedRangeExpansionTakeovers(5, 8)).toEqual([
       { kind: "range-expansion", tag: "takeover", rangeSize: 6 },

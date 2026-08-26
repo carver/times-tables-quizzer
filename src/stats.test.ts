@@ -16,7 +16,7 @@ import {
   fluencyRatio,
 } from "./stats";
 
-const FACT = { a: 7, b: 8 }; // product 56 - two digits, so one typing allowance on its target
+const FACT = { a: 7, b: 8 }; // product 56: two digits, so one typing allowance on its target
 
 function stateWith(overrides: {
   activeRangeSize?: number;
@@ -65,7 +65,7 @@ describe("factTargetMs / fluencyRatio", () => {
     const target = factTargetMs(FACT);
     const DAY_MS = 86_400_000;
     // Stored average sits well under target, but the record is 10 days
-    // stale - decay (50ms/day, engine.ts) should push the ratio up from
+    // stale. Decay (50ms/day, engine.ts) should push the ratio up from
     // what the raw average alone would give.
     const fluency: FluencyRecord = { averageResponseMs: target * 0.5, lastAttemptAt: 0 };
     const now = 10 * DAY_MS;
@@ -92,7 +92,7 @@ describe("fluencyBucket", () => {
     expect(fluencyBucket(0.799999)).toBe(3);
   });
 
-  it("buckets 0.8 up to (not including) 1.0 as bucket 2 - the fastest Mastered-eligible bucket", () => {
+  it("buckets 0.8 up to (not including) 1.0 as bucket 2, the fastest Mastered-eligible bucket", () => {
     expect(fluencyBucket(0.8)).toBe(2);
     expect(fluencyBucket(0.999999)).toBe(2);
   });
@@ -122,12 +122,12 @@ describe("classifyAccuracyCell / classifyFluencyCell", () => {
     expect(classifyFluencyCell(FACT, state, 0)).toEqual({ kind: "unattempted" });
   });
 
-  it("classifies a Fact attempted but never once correct as neverCorrect on BOTH grids - not bucketed by Fluency", () => {
+  it("classifies a Fact attempted but never once correct as neverCorrect on BOTH grids, not bucketed by Fluency", () => {
     const state = stateWith({ accuracy: { "7x8": { correctShare: 0, attemptCount: 2 } } });
 
     expect(classifyAccuracyCell(FACT, state)).toEqual({ kind: "neverCorrect" });
     // No correct Attempt ever landed, so there's no fluency record either
-    // (engine.ts only writes fluency on a correct Attempt) - the Fluency
+    // (engine.ts only writes fluency on a correct Attempt). The Fluency
     // grid must not try to bucket that absence, it shows the same amber.
     expect(classifyFluencyCell(FACT, state, 0)).toEqual({ kind: "neverCorrect" });
   });

@@ -74,7 +74,7 @@ test.describe("landing and navigation", () => {
     // Regression: the once-a-day landing rule used to override every
     // reload regardless of the current hash, so a Learner sitting on the
     // map (having already been shown it once today) and refreshing the
-    // page would get flung straight into the quiz - a browser refresh
+    // page would get flung straight into the quiz. A browser refresh
     // preserves the hash exactly, so this is not a "fresh open" the
     // once-a-day rule should apply to.
     await seed(page, { lastMapShownDay: TODAY() });
@@ -114,12 +114,12 @@ test.describe("answering", () => {
   });
 
   // Regression for a real report: on a phone, the keypad's `:active`
-  // press feedback would fire but the digit sometimes never landed -
+  // press feedback would fire but the digit sometimes never landed,
   // about 1 in 20 taps. The cause was a lost `click`: mobile browsers
   // can decide, after already accepting a touch, not to synthesize one
   // after all. main.ts now acts on `pointerdown` for touch/pen input
   // instead of waiting on `click`, which Playwright's default (mouse)
-  // `.click()` never exercises - a real touch context via `.tap()` is
+  // `.click()` never exercises. A real touch context via `.tap()` is
   // the only way to drive the code path this regression lives in, and
   // to catch the double-entry a naive fix (acting on both pointerdown
   // and the click that still follows) would cause.
@@ -168,7 +168,7 @@ test.describe("answering", () => {
     const afterWrong = await readSave(page);
 
     // Getting it right on the second go moves straight on to the next
-    // Fact - no answer to copy out - and, being practice rather than a
+    // Fact (no answer to copy out) and, being practice rather than a
     // measured Attempt, leaves Fluency, Accuracy and the Streak alone.
     await answerWithKeypad(page, correct);
     await expect(page.locator("#prompt")).toContainText("?");
@@ -190,7 +190,7 @@ test.describe("answering", () => {
 
     const correct = await promptedAnswer(page);
     await answerWithKeypad(page, correct + 1);
-    // Still hidden after one miss - only the second one gives it up.
+    // Still hidden after one miss; only the second one gives it up.
     await expect(page.locator("#prompt")).toHaveText("4 × 4 = ?");
     await answerWithKeypad(page, correct + 2);
 
@@ -236,12 +236,12 @@ test.describe("takeover Celebrations", () => {
   });
 
   // Regression for a real report: a Learner progressed through two grids
-  // in one sitting but never saw a celebration for either. Root cause -
+  // in one sitting but never saw a celebration for either. Root cause:
   // Enter is handled on `pointerdown` for touch (see main.ts's keypad
   // listener), so a tap can reveal this takeover synchronously the
   // instant the finger lands. The same physical tap still produces a
   // trailing `click` afterward, and a browser computes that click's
-  // target from the DOM as it looks at dispatch time - which is now
+  // target from the DOM as it looks at dispatch time, which is now
   // this takeover, freshly covering the same screen coordinates. Left
   // unguarded, the takeover dismissed itself within the same tap that
   // raised it, before ever being seen. A mouse `.click()` (every other
@@ -263,7 +263,7 @@ test.describe("takeover Celebrations", () => {
     await page.tap(".key-enter");
 
     const takeover = page.locator("#takeover");
-    // No wait here on purpose - this is exactly the window the bug lived
+    // No wait here on purpose. This is exactly the window the bug lived
     // in. A pre-fix run finds this already dismissed.
     await expect(takeover).toHaveAttribute("data-visible", "true");
     await expect(takeover).toHaveAttribute("data-kind", "range-expansion");
@@ -282,13 +282,13 @@ test.describe("takeover Celebrations", () => {
   // Regression coverage for the same real report, from the other
   // direction: a session that genuinely did end (app closed, reload,
   // etc.) before a range-expansion takeover was ever dismissed must not
-  // lose it - main.ts replays it on the next load instead.
+  // lose it. main.ts replays it on the next load instead.
   test("a range-expansion takeover missed in a previous session is replayed on the next load, oldest first", async ({
     page,
   }) => {
     const errors = trackPageErrors(page);
     // The Active range reached 8x8, but only a takeover for 6x6 was ever
-    // actually dismissed - 7x7's and 8x8's were lost.
+    // dismissed; 7x7's and 8x8's were lost.
     await seed(page, { activeRangeSize: 8, acknowledgedRangeSize: 5, lastMapShownDay: TODAY() });
     await page.goto("/");
 
@@ -296,7 +296,7 @@ test.describe("takeover Celebrations", () => {
     await expect(takeover).toHaveAttribute("data-visible", "true");
     await expect(takeover).toHaveAttribute("data-kind", "range-expansion");
 
-    // Three missed sizes (6, 7, 8) - replayed one at a time, not
+    // Three missed sizes (6, 7, 8), replayed one at a time, not
     // collapsed into a single "you're now at 8x8" takeover.
     await takeover.click();
     await expect(takeover).toHaveAttribute("data-visible", "true");
@@ -323,7 +323,7 @@ test.describe("takeover Celebrations", () => {
 
     await expect(page.locator("#center")).toBeHidden();
     await expect(page.locator("#keypad")).toBeHidden();
-    // Not merely hidden by CSS - the Fact is not in the DOM at all, so
+    // Not merely hidden by CSS. The Fact is not in the DOM at all, so
     // no styling failure on an older browser can leak it.
     await expect(page.locator("#prompt")).toHaveText("");
 
@@ -345,7 +345,7 @@ test.describe("takeover Celebrations", () => {
     // Same underlying property as the takeover test above, but for the
     // navigation path: leaving the quiz for the map and coming back is
     // "Start practice" again, and must restart the clock just as freshly
-    // as the very first visit does - otherwise time spent away from the
+    // as the very first visit does. Otherwise time spent away from the
     // phone gets billed to whichever Fact happens to be showing.
     const errors = trackPageErrors(page);
     await seed(page, { masteredCount: 24, lastMapShownDay: TODAY() });
@@ -375,7 +375,7 @@ test.describe("takeover Celebrations", () => {
     // earn more than one takeover, and none of them may be dropped.
     // Streak at 6 with yesterday as the last day means missedDays is 0,
     // so the recovery roll is 1/1 and the Streak deterministically
-    // reaches 7 - a Milestone.
+    // reaches 7, a Milestone.
     const errors = trackPageErrors(page);
     await seed(page, {
       masteredCount: 24,
@@ -405,7 +405,7 @@ test.describe("takeover Celebrations", () => {
 
 // The landing rule (ticket #11) decides the screen on load, so a direct
 // `/#/stats` deep link gets redirected to the map or the quiz. Reach the
-// stats page the way the Learner does instead - from the map's link.
+// stats page the way the Learner does instead, from the map's link.
 async function gotoStats(page: Page): Promise<void> {
   await page.goto("/");
   await expect(page.locator("#screen-map")).toHaveAttribute("data-active", "true");
@@ -431,7 +431,7 @@ test.describe("statistics page", () => {
     await seed(page, { masteredCount: 12 });
     await gotoStats(page);
 
-    // No cell prints its own numbers - that is what the tooltip is for.
+    // No cell prints its own numbers. That is what the tooltip is for.
     await expect(page.locator("#fluency-grid .stats-cell").first()).toHaveText("");
 
     const tooltip = page.locator("#stats-tooltip");
@@ -465,7 +465,7 @@ test.describe("statistics page", () => {
 
     await expect(page.locator("#stats-days")).toHaveText("Practiced: 3 days");
     await expect(page.locator("#stats-streak")).toContainText("4");
-    // Raw Attempt totals were deliberately left off this header - they
+    // Raw Attempt totals were deliberately left off this header. They
     // reward grinding, where days practiced rewards showing up.
     await expect(page.locator(".stats-header")).not.toContainText(/attempt/i);
   });
@@ -516,9 +516,9 @@ test.describe("the hidden reset screen", () => {
     await expect(page.locator("#screen-map")).toHaveAttribute("data-active", "true");
     await expect(page.locator("#map-streak")).toContainText("0 days");
 
-    // Nothing of the old Learner survives. (A save exists again by now -
-    // landing on the map records today as lastMapShownDay - but it is a
-    // fresh one.)
+    // Nothing of the old Learner survives. (A save exists again by now,
+    // since landing on the map records today as lastMapShownDay, but it
+    // is a fresh one.)
     const after = await readSave(page);
     expect(after.fluency).toEqual({});
     expect(after.accuracy).toEqual({});
@@ -542,7 +542,7 @@ test.describe("the hidden reset screen", () => {
 test.describe("the inline Celebration overlay", () => {
   test("hides the next Fact while it is up, and does not charge that time to it", async ({ page }) => {
     // The overlay used to be translucent, so the next Fact was readable
-    // straight through "Correct!" - and the digits being typed were
+    // straight through "Correct!", and the digits being typed were
     // washed out along with it, which read as input not registering.
     await seed(page, { lastMapShownDay: TODAY() });
     await page.goto("/");
@@ -647,7 +647,7 @@ test.describe("home-screen install", () => {
     );
 
     // Every icon the manifest points at must actually be servable, not
-    // just present in the JSON - a typo'd path here would otherwise only
+    // just present in the JSON. A typo'd path here would otherwise only
     // surface as a launcher silently falling back to a generic icon.
     for (const icon of manifest.icons as Array<{ src: string }>) {
       const iconUrl = new URL(icon.src, manifestUrl).toString();
@@ -686,7 +686,7 @@ test.describe("home-screen install", () => {
 
     // Headless CI has neither a granted notification permission nor the
     // real-world "site engagement" Chrome requires before it will
-    // register a periodic sync, so this can't assert it turns on -
+    // register a periodic sync, so this can't assert it turns on,
     // only that it never shows "On" without the hint explaining why not,
     // the one failure mode that would mislead a parent into thinking
     // reminders are live when they aren't.
@@ -705,8 +705,8 @@ test.describe("the app-update banner", () => {
     await page.goto("/");
 
     // The very first load is never "claimed" (sw.ts has no
-    // clients.claim()), so this page has no controller yet - a reload is
-    // what makes the just-activated worker genuinely control it, the
+    // clients.claim()), so this page has no controller yet. A reload is
+    // what makes the just-activated worker control it, the
     // same state any real return visit would be in.
     await expect
       .poll(() => page.evaluate(() => navigator.serviceWorker.ready.then(() => true)))
@@ -714,9 +714,9 @@ test.describe("the app-update banner", () => {
     await page.reload();
     await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
 
-    // Force a genuine byte-level difference in the built sw.js - the same
-    // file the preview server is serving from disk - so the browser's
-    // next registration.update() actually finds something to install,
+    // Force a byte-level difference in the built sw.js (the same
+    // file the preview server is serving from disk) so the browser's
+    // next registration.update() finds something to install,
     // exactly like a real deploy landing while this tab stayed open.
     const swPath = join(__dirname, "..", "dist", "sw.js");
     appendFileSync(swPath, `\n// e2e-forced-update-${Date.now()}\n`);
@@ -725,14 +725,14 @@ test.describe("the app-update banner", () => {
     await expect(page.locator("#update-banner")).toBeVisible({ timeout: 15_000 });
     await expect(page.locator("#screen-map")).toHaveAttribute("data-active", "true");
 
-    // Never on the quiz - nothing should compete for attention mid-question.
+    // Never on the quiz; nothing should compete for attention mid-question.
     await page.click("#practice-link");
     await expect(page.locator("#update-banner")).toBeHidden();
 
     await page.click("#map-link");
     await expect(page.locator("#update-banner")).toBeVisible();
 
-    // Tapping it is just a reload - the new worker is already activated
+    // Tapping it is just a reload. The new worker is already activated
     // and ready to take over.
     await page.click("#update-banner-button");
     await expect(page.locator("#screen-map")).toHaveAttribute("data-active", "true");

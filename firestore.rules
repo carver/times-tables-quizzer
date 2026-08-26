@@ -1,20 +1,20 @@
 rules_version = '2';
 
-// Access model (see docs/adr/0006): the document ID itself - a 122-bit
-// random Profile ID handed out only via a pairing link/QR - is the real
+// Access model (see docs/adr/0006): the document ID itself, a 122-bit
+// random Profile ID handed out only via a pairing link/QR, is the real
 // access boundary, the same trust model as an unlisted document link.
 // `isSignedIn()` is a cheap anonymous-auth speed bump against drive-by
 // bots, not the security boundary; it deliberately does NOT check who
 // the signed-in user is, since any device holding the right link is
 // meant to read/write it.
 //
-// No `list` is ever granted on `/profiles` - default-deny already
-// covers this (there is no `allow list` below), stated here so a future
-// edit doesn't add one without noticing what it would open up: anyone
-// signed in enumerating every household's data, not just the one they
-// were handed a link to.
+// No `list` is ever granted on `/profiles`. Default-deny already
+// covers this (there is no `allow list` below); it's stated here so a
+// future edit doesn't add one without noticing what it would open up:
+// anyone signed in enumerating every household's data, not only the one
+// they were handed a link to.
 //
-// `isValidProfileDoc` is a shallow shape check - a second, weaker copy
+// `isValidProfileDoc` is a shallow shape check, a second, weaker copy
 // of persistence.ts's own `hasCoreEngineShape`/`migrate` validation, not
 // a replacement for it. Its job is only to reject obviously-wrong junk
 // (an empty object, a string, a document missing the fields every real
@@ -42,7 +42,7 @@ service cloud.firestore {
       allow get: if isSignedIn();
       allow create, update: if isSignedIn() && isValidProfileDoc(request.resource.data);
       allow delete: if false;
-      // No `allow list` - see the file comment above.
+      // No `allow list`; see the file comment above.
     }
   }
 }

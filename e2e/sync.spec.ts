@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { answerWithKeypad, promptedAnswer, seed } from "./helpers";
 
-// docs/adr/0006's device-local pairing record and synced save file - see
+// docs/adr/0006's device-local pairing record and synced save file; see
 // src/profilePairing.ts and src/persistence.ts respectively. Read
 // directly rather than through the UI since neither is meant to be
 // visible; these specs assert on their effects, not their existence.
@@ -20,15 +20,15 @@ async function readEngineState(page: Page) {
 }
 
 // "Start sharing" reveals an inline name prompt rather than sharing
-// immediately - see main.ts's startSharingButtonEl/startSharingConfirmButtonEl.
+// immediately; see main.ts's startSharingButtonEl/startSharingConfirmButtonEl.
 async function startSharing(page: Page, label: string): Promise<void> {
   await page.click("#start-sharing-button");
   await page.fill("#start-sharing-name-input", label);
   await page.click("#start-sharing-confirm-button");
 }
 
-// jsQR (a real, independent decoder - a devDependency purely for this
-// check) confirms the on-screen QR actually scans as the expected link,
+// jsQR (a real, independent decoder, a devDependency purely for this
+// check) confirms the on-screen QR scans as the expected link,
 // rather than just asserting some <svg> appeared. Injected into the page
 // rather than imported into this Node-side test file, since decoding
 // needs a real <canvas> to rasterize the rendered SVG into pixels first.
@@ -64,7 +64,7 @@ async function scanQrCode(page: Page): Promise<string | null> {
 }
 
 // These specs run against the real Firebase Local Emulator Suite
-// (playwright.config.ts's second webServer entry) - cloudSync.ts's
+// (playwright.config.ts's second webServer entry). cloudSync.ts's
 // default "demo-times-tables-quizzer" project ID only ever talks to it,
 // never a real cloud project, so no account/credentials are needed to
 // run this suite.
@@ -74,7 +74,7 @@ async function scanQrCode(page: Page): Promise<string | null> {
 // start (playwright.config.ts's comment on the Auth port having a ~20s
 // warm-up) can still be settling when the very first sign-in + write in
 // a run lands, even though the webServer health check already reported
-// both emulators "up" - "accepting connections" and "fast enough for a
+// both emulators "up". "Accepting connections" and "fast enough for a
 // real request" turned out not to be the same thing here. In the full
 // suite this cost is usually hidden (app.spec.ts's other tests run
 // first and incidentally finish warming the emulator up), but this file
@@ -103,7 +103,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     const pageB = await ctxB.newPage();
     await pageB.goto(`/#/join/${profileId}`);
     // The name travels with the Profile document itself, not just
-    // device A's own local label - a fresh device joining sees it too.
+    // device A's own local label, so a fresh device joining sees it too.
     await expect(pageB.locator("#sync-button")).toContainText("Synced: Sam", { timeout: SYNC_TIMEOUT_MS });
 
     const stateB = await readEngineState(pageB);
@@ -144,7 +144,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
 
     const stateA = await readEngineState(pageA);
 
-    // A phone's camera app scanning this QR just opens the decoded link -
+    // A phone's camera app scanning this QR just opens the decoded link,
     // simulated here by literally navigating a fresh device to it.
     const ctxB = await browser.newContext();
     const pageB = await ctxB.newPage();
@@ -192,8 +192,8 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await expect(pageC.locator("#sync-confirm")).toBeVisible();
     await pageC.click("#sync-confirm-yes");
     await expect(pageC.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
-    // Device A's shared profile never actually answered anything, so
-    // joining genuinely replaced Device C's own streak of 1.
+    // Device A's shared profile never answered anything, so
+    // joining replaced Device C's own streak of 1.
     expect((await readEngineState(pageC)).streak.count).toBe(0);
 
     await ctxA.close();
@@ -242,7 +242,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await page.fill("#new-profile-name-input", "Sam");
     await page.click("#new-profile-confirm-button");
 
-    // The new Profile is active immediately - a genuinely fresh
+    // The new Profile is active immediately, a fresh
     // EngineState, not the original's progress carried over.
     await expect(page.locator("#sync-button")).toContainText("Sam", { timeout: SYNC_TIMEOUT_MS });
     const newProfileId = await activeProfileId(page);
@@ -251,7 +251,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     expect(freshState.activeRange.size).toBe(2);
     expect(freshState.streak.count).toBe(0);
 
-    // The original Profile is still paired, not replaced - the whole
+    // The original Profile is still paired, not replaced, the whole
     // point being "switch back easily" rather than a one-way move.
     await expect(page.locator("#profile-switcher")).toContainText("Sam");
     await expect(page.locator("#profile-switcher")).toContainText("Shared progress");
@@ -283,7 +283,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await page.click("#new-profile-confirm-button");
     await expect(page.locator("#sync-button")).toContainText("Sam", { timeout: SYNC_TIMEOUT_MS });
 
-    // Sam has Mastered nothing - all 4 are still to go, not Ada's 2.
+    // Sam has Mastered nothing, so all 4 are still to go, not Ada's 2.
     await expect(page.locator("#progress-readout")).toHaveText("4 to go");
 
     // And hopping back restores Ada's own count rather than Sam's.
@@ -342,7 +342,7 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await expect(page.locator("#sync-hint")).toContainText("name");
     await expect(page.locator("#sync-button")).toHaveText("🔗 Sync across devices");
 
-    // The form is already open from the click above - fill it directly
+    // The form is already open from the click above, so fill it directly
     // rather than the startSharing() helper, which would toggle it shut.
     await page.fill("#start-sharing-name-input", "Shared progress");
     await page.click("#start-sharing-confirm-button");
