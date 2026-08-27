@@ -5,6 +5,7 @@
 // rules.test.ts; never with plain `vitest run`.
 import { beforeAll, describe, expect, it } from "vitest";
 import { fetchProfile, subscribeToProfile, writeProfile } from "../src/cloudSync";
+import { CURRENT_SAVE_VERSION } from "../src/persistence";
 
 // A real writeProfile call always carries the whole synced shape
 // (persistence.ts never writes a partial subset). firestore.rules'
@@ -54,6 +55,15 @@ describe("cloudSync against the local emulator", () => {
     const fetched = await fetchProfileWithRetry(profileId);
     expect(fetched?.fact).toEqual({ a: 3, b: 4 });
     expect(fetched?.streak).toEqual({ count: 2 });
+  });
+
+  it("stamps the current save version on every write, so migrate() never mistakes a fresh cloud document for a pre-v6 save", async () => {
+    const profileId = `smoke-${crypto.randomUUID()}`;
+
+    await writeProfile(profileId, fullState);
+
+    const fetched = await fetchProfileWithRetry(profileId);
+    expect(fetched?.version).toBe(CURRENT_SAVE_VERSION);
   });
 
   it("fetchProfile resolves null for a Profile ID that was never written", async () => {

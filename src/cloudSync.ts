@@ -31,6 +31,7 @@ import {
   setDoc,
   type Unsubscribe,
 } from "firebase/firestore";
+import { CURRENT_SAVE_VERSION } from "./persistence";
 
 // Firebase's own convention: a project ID starting with "demo-" only
 // ever talks to a local emulator and is never a real cloud project (it
@@ -127,7 +128,10 @@ export async function fetchProfile(profileId: string): Promise<DocumentData | nu
 export async function writeProfile(profileId: string, data: Record<string, unknown>): Promise<boolean> {
   await ensureSignedIn();
   try {
-    await setDoc(profileRef(profileId), { ...data, version: 1, updatedAt: serverTimestamp() });
+    // The same version stamp a local save gets, so the reader's migrate()
+    // treats a cloud document like a save of the same age rather than a
+    // pre-v6 one (which, for a never-expanded 5x5, would shrink it to 2x2).
+    await setDoc(profileRef(profileId), { ...data, version: CURRENT_SAVE_VERSION, updatedAt: serverTimestamp() });
     return true;
   } catch (error) {
     console.error("cloudSync: write to profile", profileId, "failed", error);
