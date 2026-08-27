@@ -90,13 +90,9 @@ function hasCoreEngineShape(value: Record<string, unknown>): boolean {
 
 // Fills in defaults for fields that didn't exist when a save was
 // written, rather than discarding the whole save over a partial schema
-// mismatch. Sources of "missing fields" so far: saves written before
-// ticket #10 (no `accuracy`, `needsRedemption`, `rangeHistory`), saves
-// written before ticket #11 (no `lastMapShownDay`), saves written before
-// ticket #12 (no `practiceDayCount`), and saves written before ticket #13
-// (no `muted`). The shape of this function (keep the core fields,
-// default the new ones) is what a future version bump extends rather
-// than replaces.
+// mismatch. The shape of this function (keep the core fields, default
+// the new ones) is what a future version bump extends rather than
+// replaces.
 function migrate(value: Record<string, unknown>): PersistedState | null {
   if (!hasCoreEngineShape(value)) return null;
 

@@ -493,9 +493,8 @@ function pushEngineStateToCloud() {
 }
 
 // Starts (or restarts, if switching Profiles) the live subscription for
-// `profileId`. Exported for the pairing UI (task 4) to call right after
-// "Start sharing"/"Join existing" completes, in addition to running here
-// at boot for a device that's already paired from a previous session.
+// `profileId`: at boot for a device paired in a previous session, and
+// right after "Start sharing"/"Join existing" completes.
 let unsubscribeFromProfile: (() => void) | undefined;
 
 function startSyncing(profileId: string) {
