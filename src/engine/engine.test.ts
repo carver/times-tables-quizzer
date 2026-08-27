@@ -133,7 +133,7 @@ describe("listFacts", () => {
     ]);
   });
 
-  it("enumerates the full 1-5 x 1-5 starting Active range", () => {
+  it("enumerates every Fact of a 5x5 Active range", () => {
     const facts = listFacts({ size: 5 });
 
     expect(facts).toHaveLength(25);

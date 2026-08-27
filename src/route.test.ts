@@ -7,7 +7,7 @@ const DAY0 = new Date(2026, 0, 1).getTime();
 const day = (n: number) => DAY0 + n * DAY_MS;
 
 describe("routeFromHash", () => {
-  it("recognizes each of the three screens' hashes", () => {
+  it("recognizes the map, quiz, and stats hashes", () => {
     expect(routeFromHash("#/map")).toBe("map");
     expect(routeFromHash("#/quiz")).toBe("quiz");
     expect(routeFromHash("#/stats")).toBe("stats");
