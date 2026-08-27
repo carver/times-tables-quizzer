@@ -17,7 +17,7 @@ Local to the browser by default: no backend, no login. Progress lives in `localS
 |---|---|
 | `npm run dev` | dev server |
 | `npm run build` | production build into `dist/` |
-| `npm run typecheck` | `tsc --noEmit` |
+| `npm run typecheck` | type-check the app and the service worker (its own tsconfig) |
 | `npm test` | unit tests (Vitest) |
 | `npm run test:rules` | Firestore security rules + cloudSync, against the local Firebase emulator |
 | `npm run test:e2e` | browser tests (Playwright, builds first; also starts the Firebase emulator) |
