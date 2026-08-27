@@ -2,6 +2,20 @@ import { defineConfig, devices } from "@playwright/test";
 
 const PORT = 4173;
 
+// The host's IANA zone name when TZ is one (America/Los_Angeles). A
+// POSIX string (TZ=PDT7, which the sandbox sets) leaves Intl's
+// resolvedOptions().timeZone undefined, and an undefined timezoneId
+// lets Chromium fall back to UTC, reopening the midnight split described
+// at `use.timezoneId` below. Etc/GMT zones carry the current offset
+// instead (their sign is inverted: UTC-7 is Etc/GMT+7), which keeps Node
+// and the browser on the same calendar day for the length of a run.
+function hostTimezoneId(): string {
+  const named = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (named) return named;
+  const hours = Math.round(new Date().getTimezoneOffset() / 60);
+  return hours === 0 ? "Etc/UTC" : `Etc/GMT${hours > 0 ? "+" : "-"}${Math.abs(hours)}`;
+}
+
 export default defineConfig({
   testDir: "./e2e",
   // The unit tests cover the engine and the pure UI modules. These cover
@@ -27,7 +41,7 @@ export default defineConfig({
     // reproduces every time after that hour. Pinning the browser to
     // whichever timezone is actually running the tests keeps both sides
     // computing the same calendar day, on any machine, at any hour.
-    timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    timezoneId: hostTimezoneId(),
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   // Tests run against a real build, not the dev server. It's the same
