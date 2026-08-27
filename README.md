@@ -20,7 +20,7 @@ Local to the browser by default: no backend, no login. Progress lives in `localS
 | `npm run typecheck` | type-check the app and the service worker (its own tsconfig) |
 | `npm test` | unit tests (Vitest) |
 | `npm run test:rules` | Firestore security rules + cloudSync, against the local Firebase emulator |
-| `npm run test:e2e` | browser tests (Playwright, builds first; also starts the Firebase emulator) |
+| `npm run test:e2e` | browser tests (Playwright, builds first; runs under the Firebase emulator like `test:rules`) |
 | `npm run test:all` | all three suites |
 
 ### Working on cross-device sync
@@ -29,8 +29,10 @@ Local to the browser by default: no backend, no login. Progress lives in `localS
 
 ```bash
 firebase emulators:start --only firestore,auth   # keep running in one terminal
-npm run dev                                       # or npm run test:e2e / npm run test:rules
+npm run dev
 ```
+
+`npm run test:e2e` and `npm run test:rules` start and stop their own emulator (`firebase emulators:exec`), so stop the standalone one first or they fail with the ports taken.
 
 To point the app at a real Firebase project instead (creating one, enabling Firestore + Anonymous Auth, and deploying `firestore.rules` to it), run [`./scripts/setup_firebase.py`](scripts/setup_firebase.py) (Python 3, no extra packages needed). It's an interactive walkthrough for the parts only a human with a Google account can do. It writes the project's config to `.env.production` (see [`.env.production.example`](.env.production.example)) and also publishes it as GitHub repo variables, so the live GitHub Pages deploy gets real sync too, not only local dev.
 
