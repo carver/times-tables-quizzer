@@ -287,8 +287,8 @@ test.describe("takeover Celebrations", () => {
     page,
   }) => {
     const errors = trackPageErrors(page);
-    // The Active range reached 8x8, but only a takeover for 6x6 was ever
-    // dismissed; 7x7's and 8x8's were lost.
+    // The Active range reached 8x8, but the last takeover dismissed was
+    // 5x5's; 6x6, 7x7, and 8x8 were all lost.
     await seed(page, { activeRangeSize: 8, acknowledgedRangeSize: 5, lastMapShownDay: TODAY() });
     await page.goto("/");
 

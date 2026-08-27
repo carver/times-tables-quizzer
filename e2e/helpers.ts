@@ -2,10 +2,11 @@ import { expect, type Page } from "@playwright/test";
 
 export const STORAGE_KEY = "times-tables-quizzer:state";
 
-// Mirrors persistence.ts's CURRENT_SAVE_VERSION. Deliberately duplicated
-// rather than imported: these specs drive the built app as a black box,
-// and a seed that silently tracked a source constant would stop
-// exercising the migration path the moment that constant moved.
+// Pinned to an old save version on purpose, not persistence.ts's
+// CURRENT_SAVE_VERSION: these specs drive the built app as a black box,
+// and every seed should go through migrate() the way a real stale save
+// does. The seeds below always carry a rangeHistory entry, which is what
+// keeps the pre-v6 branch from shrinking their Active range.
 export const SAVE_VERSION = 4;
 
 // The engine's local-calendar day key (engine.ts's dayKey). Reimplemented
