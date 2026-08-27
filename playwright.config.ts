@@ -56,30 +56,18 @@ export default defineConfig({
   // configured locally. Discovered the hard way when a real
   // `.env.production` on a dev machine made this suite start trying to
   // sign in against the real Firebase Auth API instead of the emulator.
-  webServer: [
-    {
-      command: `npm run build -- --mode test && npm run preview -- --port ${PORT} --strictPort`,
-      url: `http://localhost:${PORT}`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 120_000,
-    },
-    // The Firebase emulator (docs/adr/0006): cloudSync.ts's default
-    // "demo-times-tables-quizzer" project ID only ever talks to this,
-    // never a real cloud project, so the sync/pairing specs below get a
-    // real Firestore+Auth backend without needing any real account.
-    // Polls the Auth emulator specifically, not Firestore: Auth
-    // consistently finishes initializing later (~20s vs ~5s)
-    // despite starting second in its own startup log, so polling
-    // Firestore's port alone reports "ready" while Auth is still
-    // warming up and signInAnonymously calls would fail outright.
-    {
-      // `npx firebase`, not a bare `firebase`: guarantees resolution via
-      // the local firebase-tools devDependency regardless of whether the
-      // spawning shell happens to have node_modules/.bin on PATH.
-      command: "npx firebase emulators:start --only firestore,auth --project demo-times-tables-quizzer",
-      url: "http://127.0.0.1:9200/",
-      reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
-    },
-  ],
+  //
+  // The Firebase emulator (docs/adr/0006) is not started here. `npm run
+  // test:e2e` wraps this whole run in `firebase emulators:exec`, the same
+  // way `test:rules` does: exec waits for every emulator (Auth finishes
+  // ~15s after Firestore) before running Playwright, and tears the
+  // Firestore JVM down afterwards. As a webServer entry, Playwright only
+  // killed the `firebase` node process; the Java child it spawned kept
+  // port 8181 and broke the next `test:rules`.
+  webServer: {
+    command: `npm run build -- --mode test && npm run preview -- --port ${PORT} --strictPort`,
+    url: `http://localhost:${PORT}`,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
 });
