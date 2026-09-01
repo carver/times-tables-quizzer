@@ -593,7 +593,7 @@ function renderProfileSwitcher() {
     const button = document.createElement("button");
     button.type = "button";
     const isActive = profile.profileId === active?.profileId;
-    button.className = "settings-link";
+    button.className = isActive ? "profile-pill profile-pill--active" : "profile-pill";
     button.textContent = isActive ? `${profile.label} ✓` : profile.label;
     button.disabled = isActive;
     button.addEventListener("click", () => void switchToProfile(profile.profileId));
@@ -603,7 +603,7 @@ function renderProfileSwitcher() {
   const addButton = document.createElement("button");
   addButton.type = "button";
   addButton.id = "new-profile-button";
-  addButton.className = "settings-link";
+  addButton.className = "profile-pill";
   addButton.textContent = "+ New";
   addButton.addEventListener("click", () => {
     newProfileFormEl.hidden = !newProfileFormEl.hidden;
