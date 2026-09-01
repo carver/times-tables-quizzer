@@ -223,6 +223,52 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await ctxB.close();
   });
 
+  test("a device already synced to one Profile joins a second without the replace warning, keeping both paired", async ({
+    browser,
+  }) => {
+    const ctxA = await browser.newContext();
+    const pageA = await ctxA.newPage();
+    await pageA.goto("/");
+    await pageA.click("#sync-button");
+    await startSharing(pageA, "Sam");
+    await expect(pageA.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
+    const samProfileId = await activeProfileId(pageA);
+
+    // Device B has real practice of its own, but it's already synced as
+    // "Ada", so that history lives in Ada's document, not only here.
+    const ctxB = await browser.newContext();
+    const pageB = await ctxB.newPage();
+    await pageB.goto("/");
+    await pageB.click("#practice-link");
+    await answerWithKeypad(pageB, await promptedAnswer(pageB));
+    await pageB.click("#map-link");
+    await pageB.click("#sync-button");
+    await startSharing(pageB, "Ada");
+    await expect(pageB.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
+
+    // A paired device has no paste box; its way in is the scanned QR's
+    // link (route.ts's joinProfileIdFromHash), exactly the path a parent
+    // adding a second child's Profile takes. A scan opens the link as a
+    // fresh page load, and the join is consumed at boot only, so a
+    // fragment-only goto on the open page wouldn't be the same thing.
+    const pageB2 = await ctxB.newPage();
+    await pageB2.goto(`/#/join/${samProfileId}`);
+
+    await expect(pageB2.locator("#sync-button")).toContainText("Sam", { timeout: SYNC_TIMEOUT_MS });
+    await expect(pageB2.locator("#sync-confirm")).toBeHidden();
+    await expect(pageB2.locator("#sync-hint")).toContainText('"Ada" is still here');
+    await expect(pageB2.locator("#profile-switcher")).toContainText("Ada");
+    expect((await readEngineState(pageB2)).streak.count).toBe(0);
+
+    // Ada's own history came along for the ride, one tap away.
+    await pageB2.click('#profile-switcher button:has-text("Ada")');
+    await expect(pageB2.locator("#sync-button")).toContainText("Ada", { timeout: SYNC_TIMEOUT_MS });
+    expect((await readEngineState(pageB2)).streak.count).toBe(1);
+
+    await ctxA.close();
+    await ctxB.close();
+  });
+
   test("Start a new profile creates a fresh, separate Profile and the switcher can hop back to the original", async ({
     page,
   }) => {

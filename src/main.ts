@@ -151,16 +151,16 @@ getEl<HTMLDivElement>("app").innerHTML = `
     </div>
   </section>
 
-  <!-- Shown only mid-"Join existing", and only when this device already
-       has its own non-trivial practice history. Joining a Profile
-       replaces this device's history with the shared one (there is one
-       Learner, not two histories to merge; docs/adr/0006), so this is
-       the one irreversible-feeling moment in the whole sync feature that
-       gets an explicit confirmation rather than happening silently. -->
+  <!-- The sync panel's one confirmation dialog, for its one
+       irreversible-feeling moment: an unpaired device with its own
+       non-trivial practice history joining a Profile, which replaces
+       that history with the shared one (there is one Learner, not two
+       histories to merge; docs/adr/0006). Body and confirm label are
+       set per call by askSyncConfirm. -->
   <div class="modal-confirm" id="sync-confirm" hidden role="dialog" aria-modal="true">
     <div class="modal-confirm-card">
       <p id="sync-confirm-body"></p>
-      <button type="button" class="modal-confirm-primary" id="sync-confirm-yes">Replace with shared history</button>
+      <button type="button" class="modal-confirm-primary" id="sync-confirm-yes"></button>
       <button type="button" class="modal-confirm-secondary" id="sync-confirm-no">Cancel</button>
     </div>
   </div>
@@ -583,8 +583,8 @@ function renderProfileSwitcher() {
   for (const profile of pairedProfiles()) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "settings-link";
     const isActive = profile.profileId === active?.profileId;
+    button.className = "settings-link";
     button.textContent = isActive ? `${profile.label} ✓` : profile.label;
     button.disabled = isActive;
     button.addEventListener("click", () => void switchToProfile(profile.profileId));
@@ -695,19 +695,34 @@ function completeJoin(profileId: string, remoteEngine: EngineState, label: strin
   applyRoute(routeFromHash(window.location.hash));
 }
 
-// Set only while docs/adr/0006's replace-confirmation is up, so the
-// Confirm button has something to act on and Cancel has nothing to
-// clean up beyond hiding the dialog.
-let pendingJoinProfileId: string | null = null;
-let pendingJoinRemoteEngine: EngineState | undefined;
-let pendingJoinLabel: string | undefined;
+// Resolved as a promise so each caller reads as straight-line code
+// ("ask, then act if yes") instead of stashing what-to-do-on-Yes in
+// module state for the button handlers to pick up. Asking again while a
+// previous ask is still up answers that one "no".
+let resolveSyncConfirm: ((confirmed: boolean) => void) | undefined;
 
-function showJoinConfirm(local: EngineState, remote: EngineState) {
-  syncConfirmBodyEl.textContent =
+function askSyncConfirm(body: string, confirmLabel: string): Promise<boolean> {
+  resolveSyncConfirm?.(false);
+  syncConfirmBodyEl.textContent = body;
+  syncConfirmYesEl.textContent = confirmLabel;
+  syncConfirmEl.hidden = false;
+  return new Promise((resolve) => {
+    resolveSyncConfirm = resolve;
+  });
+}
+
+function settleSyncConfirm(confirmed: boolean) {
+  syncConfirmEl.hidden = true;
+  resolveSyncConfirm?.(confirmed);
+  resolveSyncConfirm = undefined;
+}
+
+function replaceHistoryWarning(local: EngineState, remote: EngineState): string {
+  return (
     `This phone already has its own practice history (Streak: ${dayCount(local.streak.count)}, ` +
     `${local.activeRange.size}×${local.activeRange.size} range). Joining will replace it with the shared history ` +
-    `(Streak: ${dayCount(remote.streak.count)}, ${remote.activeRange.size}×${remote.activeRange.size} range). Continue?`;
-  syncConfirmEl.hidden = false;
+    `(Streak: ${dayCount(remote.streak.count)}, ${remote.activeRange.size}×${remote.activeRange.size} range). Continue?`
+  );
 }
 
 // The entry point for "Join existing". Fetches whatever's
@@ -728,15 +743,20 @@ async function beginJoin(profileId: string): Promise<void> {
   }
   const label = labelFromDocument(data);
 
-  if (hasNonTrivialLocalProgress(quizState.engine)) {
-    pendingJoinProfileId = profileId;
-    pendingJoinRemoteEngine = remoteEngine;
-    pendingJoinLabel = label;
-    showJoinConfirm(quizState.engine, remoteEngine);
-    return;
+  // A device already synced to a Profile has nothing of its own to lose:
+  // the state on it *is* that Profile's shared history, which stays in
+  // the cloud and stays paired here, one tap away in the switcher. Only
+  // an unpaired device with real local practice gets the replace warning.
+  const previous = activeProfile();
+  if (!previous && hasNonTrivialLocalProgress(quizState.engine)) {
+    const confirmed = await askSyncConfirm(replaceHistoryWarning(quizState.engine, remoteEngine), "Replace with shared history");
+    if (!confirmed) return;
   }
 
   completeJoin(profileId, remoteEngine, label);
+  if (previous && previous.profileId !== profileId) {
+    showSyncHint(`Joined "${label}". "${previous.label}" is still here too, one tap away below.`);
+  }
 }
 
 // Builds one 12x12 grid of cells, shared by the Progress map's own grid
@@ -1487,22 +1507,8 @@ stopSyncingButtonEl.addEventListener("click", () => {
   renderSyncPanel();
 });
 
-syncConfirmYesEl.addEventListener("click", () => {
-  if (pendingJoinProfileId && pendingJoinRemoteEngine && pendingJoinLabel) {
-    completeJoin(pendingJoinProfileId, pendingJoinRemoteEngine, pendingJoinLabel);
-  }
-  syncConfirmEl.hidden = true;
-  pendingJoinProfileId = null;
-  pendingJoinRemoteEngine = undefined;
-  pendingJoinLabel = undefined;
-});
-
-syncConfirmNoEl.addEventListener("click", () => {
-  syncConfirmEl.hidden = true;
-  pendingJoinProfileId = null;
-  pendingJoinRemoteEngine = undefined;
-  pendingJoinLabel = undefined;
-});
+syncConfirmYesEl.addEventListener("click", () => settleSyncConfirm(true));
+syncConfirmNoEl.addEventListener("click", () => settleSyncConfirm(false));
 
 // Chrome/Android fires this instead of showing its own install banner
 // when the page calls preventDefault() on it, handing control of exactly
