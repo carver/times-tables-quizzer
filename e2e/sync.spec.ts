@@ -338,17 +338,62 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await expect(page.locator("#progress-readout")).toHaveText("2 to go");
   });
 
-  test("Stop syncing detaches this device but leaves its local progress untouched", async ({ page }) => {
+  test("Stop syncing asks first, then detaches this device but leaves its local progress untouched", async ({ page }) => {
     await page.goto("/");
+    await page.click("#practice-link");
+    await answerWithKeypad(page, await promptedAnswer(page));
+    await page.click("#map-link");
     await page.click("#sync-button");
     await startSharing(page, "Shared progress");
     await expect(page.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
+    await expect(page.locator("#stop-syncing-button")).toHaveText("Stop syncing on this device");
 
     await page.click("#stop-syncing-button");
+    await expect(page.locator("#sync-confirm")).toBeVisible();
+    await expect(page.locator("#sync-confirm-body")).toContainText('Stop syncing "Shared progress"');
+    await page.click("#sync-confirm-no");
+    await expect(page.locator("#sync-confirm")).toBeHidden();
+    await expect(page.locator("#sync-button")).toContainText("Synced");
+
+    await page.click("#stop-syncing-button");
+    await page.click("#sync-confirm-yes");
 
     await expect(page.locator("#sync-button")).toHaveText("🔗 Sync across devices");
     const raw = await page.evaluate((key) => window.localStorage.getItem(key), PROFILES_KEY);
     expect(JSON.parse(raw!).profiles).toEqual([]);
+    expect((await readEngineState(page)).streak.count).toBe(1);
+  });
+
+  test("removing one of two Profiles switches this device to the other, with that Profile's own progress", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.click("#practice-link");
+    await answerWithKeypad(page, await promptedAnswer(page));
+    await page.click("#map-link");
+    await page.click("#sync-button");
+    await startSharing(page, "Ada");
+    await expect(page.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
+    const adaProfileId = await activeProfileId(page);
+
+    await page.click("#new-profile-button");
+    await page.fill("#new-profile-name-input", "Sam");
+    await page.click("#new-profile-confirm-button");
+    await expect(page.locator("#sync-button")).toContainText("Sam", { timeout: SYNC_TIMEOUT_MS });
+    expect((await readEngineState(page)).streak.count).toBe(0);
+    await expect(page.locator("#stop-syncing-button")).toHaveText('Remove "Sam" from this device');
+
+    await page.click("#stop-syncing-button");
+    await expect(page.locator("#sync-confirm-body")).toContainText('This phone will switch to "Ada"');
+    await page.click("#sync-confirm-yes");
+
+    // Not just relabelled: Ada's state is back on screen, so the next
+    // Attempt lands in Ada's document rather than Sam's leftovers.
+    await expect(page.locator("#sync-button")).toContainText("Ada", { timeout: SYNC_TIMEOUT_MS });
+    expect(await activeProfileId(page)).toBe(adaProfileId);
+    expect((await readEngineState(page)).streak.count).toBe(1);
+    await expect(page.locator("#profile-switcher")).not.toContainText("Sam");
+    await expect(page.locator("#stop-syncing-button")).toHaveText("Stop syncing on this device");
   });
 
   test("the hidden reset screen also detaches a synced device, so the wipe isn't immediately undone by the next sync", async ({

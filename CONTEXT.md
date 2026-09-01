@@ -9,7 +9,7 @@ The one person using the app, currently a specific 9-year-old practicing multipl
 _Avoid_: User, student, player
 
 **Profile**:
-The shareable, syncable unit of one Learner's progress (docs/adr/0006). A device joins a Profile via a one-time pairing link rather than a recurring export/import, and any number of devices can share one. Deliberately not a "Household": bundling multiple Learners' progress into one shared document would let two Learners practicing on two different devices at once clobber each other's concurrent writes, so each Learner's progress is its own independent Profile instead. This app's own UI only ever creates and shows one Profile at a time. The data model supports more without a rework, but nothing here builds the UI to manage several.
+The shareable, syncable unit of one Learner's progress (docs/adr/0006). A device joins a Profile via a one-time pairing link rather than a recurring export/import, and any number of devices can share one. Deliberately not a "Household": bundling multiple Learners' progress into one shared document would let two Learners practicing on two different devices at once clobber each other's concurrent writes, so each Learner's progress is its own independent Profile instead. A device shows one Profile at a time, but can stay paired with several (say, two siblings sharing a parent's phone) and switch between them from the sync panel. Forgetting a Profile on a device is confirmed first, since a device may hold the only copy of its link.
 _Avoid_: Household, Account, User, Family
 
 **Fact**:

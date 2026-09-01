@@ -18,6 +18,7 @@ import {
   removePairedProfile,
   setActiveProfile,
   updatePairedProfileLabel,
+  type PairedProfile,
 } from "./profilePairing";
 import { computeProgressMapStatus, type ProgressHighWaterMark, type ProgressReadout } from "./progressMap";
 import { disableDailyReminder, enableDailyReminder, isReminderSupported } from "./reminders";
@@ -151,12 +152,13 @@ getEl<HTMLDivElement>("app").innerHTML = `
     </div>
   </section>
 
-  <!-- The sync panel's one confirmation dialog, for its one
-       irreversible-feeling moment: an unpaired device with its own
-       non-trivial practice history joining a Profile, which replaces
-       that history with the shared one (there is one Learner, not two
-       histories to merge; docs/adr/0006). Body and confirm label are
-       set per call by askSyncConfirm. -->
+  <!-- The sync panel's one confirmation dialog, for its two
+       irreversible-feeling moments: an unpaired device with its own
+       non-trivial practice history joining a Profile (which replaces
+       that history with the shared one; there is one Learner, not two
+       histories to merge; docs/adr/0006), and forgetting a Profile on
+       this device (the only copy of its link, if no other device holds
+       one). Body and confirm label are set per call by askSyncConfirm. -->
   <div class="modal-confirm" id="sync-confirm" hidden role="dialog" aria-modal="true">
     <div class="modal-confirm-card">
       <p id="sync-confirm-body"></p>
@@ -561,6 +563,13 @@ function renderSyncPanel() {
     syncUnpairedActionsEl.hidden = true;
     syncPairedActionsEl.hidden = false;
     syncStatusEl.textContent = `This device is synced to "${profile.label}".`;
+    // "Stop syncing" is only honest when it's the last Profile here; with
+    // another still paired, the device keeps syncing (to that one), and
+    // what actually happens is this Profile being forgotten.
+    const hasOtherProfiles = pairedProfiles().some((other) => other.profileId !== profile.profileId);
+    stopSyncingButtonEl.textContent = hasOtherProfiles
+      ? `Remove "${profile.label}" from this device`
+      : "Stop syncing on this device";
   } else {
     syncButtonEl.textContent = "🔗 Sync across devices";
     syncUnpairedActionsEl.hidden = false;
@@ -1494,19 +1503,51 @@ showQrButtonEl.addEventListener("click", () => {
   })();
 });
 
-// Detaches this device from its Profile. The Profile itself, and any
-// other device synced to it, are untouched. This device's own local
-// progress is left exactly as it currently stands (not erased), just no
-// longer pushed to or pulled from the cloud.
-stopSyncingButtonEl.addEventListener("click", () => {
+function stopSyncingWarning(profile: PairedProfile, fallback: PairedProfile | undefined): string {
+  if (fallback) {
+    return (
+      `Remove "${profile.label}" from this device? This phone will switch to "${fallback.label}". ` +
+      `The shared progress itself is untouched, but to bring it back here later you'll need its sync link ` +
+      `from another synced device.`
+    );
+  }
+  return (
+    `Stop syncing "${profile.label}" on this device? Practice here carries on, just no longer shared ` +
+    `with other devices. To sync again later you'll need the link from another synced device.`
+  );
+}
+
+// Forgets the active Profile on this device only; the Profile itself,
+// and any other device synced to it, are untouched. Confirmed first: the
+// button sits right under the switcher pills, and on a device holding
+// the only copy of the link, forgetting it is the one way to lose a
+// Profile for good. With another Profile still paired, this device
+// switches over to it, so what's on screen always belongs to the Profile
+// the panel names (and the next Attempt pushes to the right document).
+// With none left, this device's own local progress stays exactly as it
+// stands, just no longer pushed to or pulled from the cloud.
+async function stopSyncing(): Promise<void> {
   const profile = activeProfile();
   if (!profile) return;
+  const fallback = pairedProfiles().find((other) => other.profileId !== profile.profileId);
+  const confirmed = await askSyncConfirm(
+    stopSyncingWarning(profile, fallback),
+    fallback ? "Remove from this device" : "Stop syncing",
+  );
+  if (!confirmed) return;
+
   unsubscribeFromProfile?.();
   unsubscribeFromProfile = undefined;
   removePairedProfile(profile.profileId);
-  renderSyncPanel();
-});
+  if (!fallback) {
+    renderSyncPanel();
+    return;
+  }
+  await switchToProfile(fallback.profileId);
+  showSyncHint(`Removed "${profile.label}" from this device. Now synced to "${fallback.label}".`);
+}
 
+stopSyncingButtonEl.addEventListener("click", () => void stopSyncing());
 syncConfirmYesEl.addEventListener("click", () => settleSyncConfirm(true));
 syncConfirmNoEl.addEventListener("click", () => settleSyncConfirm(false));
 
