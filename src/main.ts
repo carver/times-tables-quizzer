@@ -1745,7 +1745,35 @@ function applyRoute(route: Route) {
   if (route === "stats") renderStats();
 }
 
-window.addEventListener("hashchange", () => applyRoute(routeFromHash(window.location.hash)));
+// Opens the sync panel and starts the join for a pairing link (route.ts's
+// joinProfileIdFromHash: "#/join/<id>", from "Copy link" or the QR). A
+// one-time action, not a screen with its own back-button-navigable
+// state, so callers clear the hash before getting here.
+function openJoinPanel(profileId: string) {
+  syncPanelEl.hidden = false;
+  renderSyncPanel();
+  showSyncHint("Looking for the shared progress from that link…");
+  void beginJoin(profileId);
+}
+
+// A pairing link doesn't always arrive as a fresh page load. An
+// installed PWA that's already open can be handed a scanned link as a
+// navigation of its existing window, and since the link differs from
+// the app's own URL only by fragment, that's a hashchange, not a boot.
+// Without this branch the join would be silently dropped (routeFromHash
+// falls back to the map for any "#/join/..."). replaceState rather than
+// setting location.hash: no second hashchange, and no history entry
+// that Back could return to and re-run the join from.
+window.addEventListener("hashchange", () => {
+  const joinProfileId = joinProfileIdFromHash(window.location.hash);
+  if (joinProfileId) {
+    history.replaceState(null, "", hashForRoute("map"));
+    applyRoute("map");
+    openJoinPanel(joinProfileId);
+    return;
+  }
+  applyRoute(routeFromHash(window.location.hash));
+});
 
 // Captured before anything below has a chance to overwrite
 // window.location.hash (decideLanding's own landing-hash normalization
@@ -1791,13 +1819,7 @@ if (pairedProfile) {
   startSyncing(pairedProfile.profileId);
 }
 
-// A pairing link (route.ts's joinProfileIdFromHash: "#/join/<id>", from
-// "Copy link") is a one-time action, not a screen with its
-// own back-button-navigable state. Consumed here once (the hash was
-// already normalized to the map above, as part of the landing decision).
-if (joinProfileId) {
-  syncPanelEl.hidden = false;
-  renderSyncPanel();
-  showSyncHint("Looking for the shared progress from that link…");
-  void beginJoin(joinProfileId);
-}
+// The boot-time arrival of a pairing link (the hash was already
+// normalized to the map above, as part of the landing decision). The
+// hashchange listener above covers a link arriving on an open page.
+if (joinProfileId) openJoinPanel(joinProfileId);

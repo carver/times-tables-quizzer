@@ -248,9 +248,8 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
 
     // A paired device has no paste box; its way in is the scanned QR's
     // link (route.ts's joinProfileIdFromHash), exactly the path a parent
-    // adding a second child's Profile takes. A scan opens the link as a
-    // fresh page load, and the join is consumed at boot only, so a
-    // fragment-only goto on the open page wouldn't be the same thing.
+    // adding a second child's Profile takes. Opened as a fresh page load
+    // here; the hashchange arrival is covered by its own test below.
     const pageB2 = await ctxB.newPage();
     await pageB2.goto(`/#/join/${samProfileId}`);
 
@@ -264,6 +263,40 @@ test.describe("cross-device sync (docs/adr/0006)", () => {
     await pageB2.click('#profile-switcher button:has-text("Ada")');
     await expect(pageB2.locator("#sync-button")).toContainText("Ada", { timeout: SYNC_TIMEOUT_MS });
     expect((await readEngineState(pageB2)).streak.count).toBe(1);
+
+    await ctxA.close();
+    await ctxB.close();
+  });
+
+  test("a pairing link arriving as a hash change on an already-open app joins too, and leaves the URL on the map", async ({
+    browser,
+  }) => {
+    const ctxA = await browser.newContext();
+    const pageA = await ctxA.newPage();
+    await pageA.goto("/");
+    await pageA.click("#sync-button");
+    await startSharing(pageA, "Sam");
+    await expect(pageA.locator("#sync-button")).toContainText("Synced", { timeout: SYNC_TIMEOUT_MS });
+    const samProfileId = await activeProfileId(pageA);
+
+    // An installed PWA that's already open (here: mid-practice) can be
+    // handed a scanned link as a fragment navigation of its existing
+    // window rather than a fresh load. Nothing reboots; only hashchange
+    // fires.
+    const ctxB = await browser.newContext();
+    const pageB = await ctxB.newPage();
+    await pageB.goto("/");
+    await pageB.click("#practice-link");
+    await expect(pageB.locator("#screen-quiz")).toHaveAttribute("data-active", "true");
+    await pageB.evaluate((id) => {
+      window.location.hash = `#/join/${id}`;
+    }, samProfileId);
+
+    await expect(pageB.locator("#sync-panel")).toBeVisible();
+    await expect(pageB.locator("#sync-button")).toContainText("Sam", { timeout: SYNC_TIMEOUT_MS });
+    // Consumed, not kept: a reload or Back must not run the join again.
+    await expect(pageB).toHaveURL(/#\/map$/);
+    await expect(pageB.locator("#screen-map")).toHaveAttribute("data-active", "true");
 
     await ctxA.close();
     await ctxB.close();
