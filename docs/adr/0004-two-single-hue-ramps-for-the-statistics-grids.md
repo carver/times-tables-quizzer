@@ -1,6 +1,6 @@
 # Two single-hue ramps for the statistics grids, not red/green and blue→green
 
-The statistics page shows two 12 × 12 grids of Facts, the **Accuracy grid** and the **Fluency grid**, named for the two `CONTEXT.md` terms they render. The obvious encoding, and the one originally asked for, was a red→green scale for Accuracy and a blue→green scale for Fluency. Both were rejected.
+The statistics page shows two 12 × 12 grids of Facts, the **Accuracy grid** and the **Fluency grid**, named for the two `GLOSSARY.md` terms they render. The obvious encoding, and the one originally asked for, was a red→green scale for Accuracy and a blue→green scale for Fluency. Both were rejected.
 
 `blue→green` is two hues carrying a single continuous magnitude. The point where the hue turns over reads as a category boundary that isn't in the data, so cells sort themselves into "the blue ones" and "the green ones" instead of along a ramp. Continuous magnitude takes one hue, light→dark. `red→green` has the same structural problem plus the worst possible pair for red-green colorblindness. The Learner isn't colorblind, but the grids are the app's most-shared screen and the encoding shouldn't depend on that staying true of everyone who sees it.
 
@@ -8,7 +8,7 @@ Both grids therefore use **one hue each, light→dark, with darker meaning bette
 
 Three cell states sit outside the ramps: a Fact never attempted renders empty (surface plus a hairline ring), a Fact attempted but never once answered correctly renders soft amber on both grids, and a Fact with only one or two Attempts renders at its ramp step but with a dashed ring, marking it provisional. The amber state is the page's most actionable signal and would be invisible if it were folded in with never-attempted.
 
-The Fluency grid buckets each Fact by the ratio of its current Fluency to *its own* target (the fixed target speed plus that Fact's typing allowance) rather than by raw milliseconds, so that a ramp break falls exactly at a ratio of 1.0. Since the only per-Fact variation is the typing allowance that `CONTEXT.md` already defines, this barely distorts comparison between Facts while giving the ramp a break at a boundary that means something.
+The Fluency grid buckets each Fact by the ratio of its current Fluency to *its own* target (the fixed target speed plus that Fact's typing allowance) rather than by raw milliseconds, so that a ramp break falls exactly at a ratio of 1.0. Since the only per-Fact variation is the typing allowance that `GLOSSARY.md` already defines, this barely distorts comparison between Facts while giving the ramp a break at a boundary that means something.
 
 **That break is the target-speed line, not the Mastered line.** An earlier revision of this ADR claimed the latter and was wrong. ADR 0003 added a second condition to Mastered: the Fact must also have been answered correctly since its most recent wrong Attempt. The Fluency grid cannot see that condition and deliberately doesn't try to; it renders Fluency, which is what its name says. So a Fact the Learner is fast on, but has just gotten wrong, sits on the fast side of the break while `isMastered` returns false for it.
 

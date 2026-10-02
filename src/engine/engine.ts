@@ -28,7 +28,7 @@ export type FluencyRecord = {
   lastAttemptAt: number;
 };
 
-// A per-Fact, recency-weighted share of correct Attempts (CONTEXT.md).
+// A per-Fact, recency-weighted share of correct Attempts (GLOSSARY.md).
 // Unlike FluencyRecord this deliberately carries no "lastAttemptAt" /
 // decay input. Accuracy does not decay with time, so there is nothing
 // for a decay function to read. It is display-only: nothing in this
@@ -108,7 +108,7 @@ export const UNATTEMPTED_WEIGHT_MS = 5_000;
 
 // How much slower (in ms) a Fact's effective response time is treated as
 // being, per day it has gone unpracticed: the passive decay from ADR
-// 0001 / CONTEXT.md's Fluency definition.
+// 0001 / GLOSSARY.md's Fluency definition.
 const DECAY_MS_PER_DAY = 50;
 
 // While boosted, a Fact's selection weight is multiplied by this factor
@@ -139,7 +139,7 @@ export function typingAllowanceMs(answer: number): number {
 
 // The Fact's current Fluency, in ms: its stored average plus decay for
 // time elapsed since it was last practiced. This is "Fluency" as
-// CONTEXT.md defines it. The decay isn't a separate concept layered on
+// GLOSSARY.md defines it. The decay isn't a separate concept layered on
 // top; it's part of what "current Fluency" means. Used both as the base
 // for selection weight (before the boost multiplier) and as the personal
 // baseline for celebration (ticket #6) / the progression check (ticket #7).
@@ -339,7 +339,7 @@ function accrueMissedDays(streak: StreakState, today: DayKey): number {
 }
 
 // Runs on every Attempt (correct or not; Streak only cares about
-// practice happening, per CONTEXT.md). `roll` is a [0, 1) draw from the
+// practice happening, per GLOSSARY.md). `roll` is a [0, 1) draw from the
 // injected random source, kept as an explicit parameter (rather than
 // pulled from Dependencies internally) so recovery odds are exercised
 // deterministically in tests without threading a whole Dependencies
@@ -376,7 +376,7 @@ export type AttemptSubmitted = {
 
 export type CelebrationKind = "correctness-only" | "personal-best" | "milestone" | "range-expansion";
 
-// CONTEXT.md's Celebration entry: inline plays over the practice screen
+// GLOSSARY.md's Celebration entry: inline plays over the practice screen
 // without interrupting; takeover fills the screen and waits to be
 // dismissed. The tag is a fixed property of the kind (not a per-Attempt
 // choice); see CELEBRATION_TAGS.
@@ -558,7 +558,7 @@ export function submitAttempt(
     // answered correctly again, independent of `boosted`, which expires
     // on a fixed Attempt count instead of on evidence.
     needsRedemption = { ...state.needsRedemption, [key]: true };
-    // A wrong Attempt doesn't change the average (CONTEXT.md: "a wrong
+    // A wrong Attempt doesn't change the average (GLOSSARY.md: "a wrong
     // Attempt doesn't feed Fluency"), but it's still practice, so the
     // decay clock, which tracks time since last *practiced* rather than
     // last *correct*, should reset if a record already exists.

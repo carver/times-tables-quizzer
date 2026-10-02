@@ -278,7 +278,7 @@ getEl<HTMLDivElement>("app").innerHTML = `
   </div>
 
   <!-- ticket #13: the takeover for range-expansion and Milestone Celebrations
-       (CONTEXT.md's Celebration entry: "fills the screen and waits for the
+       (GLOSSARY.md's Celebration entry: "fills the screen and waits for the
        Learner to dismiss it"). Lives outside the three routed <section>s.
        data-visible, not the route, controls whether it's shown, since it
        can cover whichever screen the Learner was on when the Attempt
@@ -978,7 +978,7 @@ function renderQuiz() {
   if (quizState.mode === "correcting") {
     // The correct answer is shown outright. The Learner isn't being
     // quizzed again, they're retyping to practice it. Nothing here feeds
-    // Fluency (CONTEXT.md), so there's no idle-check to arm.
+    // Fluency (GLOSSARY.md), so there's no idle-check to arm.
     promptEl.textContent = `${quizState.wrongFact.a} × ${quizState.wrongFact.b} = ${quizState.correctAnswer}`;
     disarmIdleCheck();
   } else if (quizState.mode === "retrying") {
@@ -1079,7 +1079,7 @@ function handleBackspace() {
 }
 
 // Plays and shows every inline Celebration from the set at once: "plays
-// simultaneously" per CONTEXT.md, which for the sounds means literally
+// simultaneously" per GLOSSARY.md, which for the sounds means literally
 // overlapping playSound calls, and for the overlay means the first (in
 // practice the only; engine.ts pushes exactly one of correctness-only /
 // personal-best per Attempt, never both) heads the on-screen text. A
@@ -1692,7 +1692,7 @@ document.querySelectorAll<HTMLButtonElement>(".legend-item").forEach((item) => {
 });
 
 // WebAudio refuses to produce sound until a real user gesture has
-// touched the AudioContext (CONTEXT.md-adjacent browser rule, not a
+// touched the AudioContext (GLOSSARY.md-adjacent browser rule, not a
 // domain one). Tapping "Practice" on the Progress map is the gesture
 // the landing flow supplies for free (the issue body), but a same-day
 // return visit skips the map entirely (route.ts's decideLanding sends it
@@ -1782,7 +1782,7 @@ window.addEventListener("hashchange", () => {
 // would silently see "#/map" instead and never notice the join at all.
 const joinProfileId = joinProfileIdFromHash(window.location.hash);
 
-// CONTEXT.md's Progress map landing rule: shown on the first open of
+// GLOSSARY.md's Progress map landing rule: shown on the first open of
 // each calendar day, straight to the quiz on later opens the same day.
 // Reuses the engine's dayKey (via decideLanding) rather than a second
 // notion of "day". An empty hash (a fresh open) is passed

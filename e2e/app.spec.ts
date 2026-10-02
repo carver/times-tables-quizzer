@@ -182,7 +182,7 @@ test.describe("answering", () => {
   test("a second wrong answer shows the correct one and requires retyping it, without recording an Attempt", async ({
     page,
   }) => {
-    // The retype is practice, not measurement (CONTEXT.md's Attempt
+    // The retype is practice, not measurement (GLOSSARY.md's Attempt
     // entry). This asserts the engine-visible consequence: dismissing the
     // correction must not move Fluency, Accuracy, or the Streak.
     await seed(page, { lastMapShownDay: TODAY(), fact: { a: 4, b: 4 } });

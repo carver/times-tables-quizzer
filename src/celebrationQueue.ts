@@ -1,5 +1,5 @@
 // Pure, DOM-free module behind ticket #13's presentation of an Attempt's
-// Celebration set (CONTEXT.md's Celebration entry: "An Attempt yields a
+// Celebration set (GLOSSARY.md's Celebration entry: "An Attempt yields a
 // *set* of Celebrations, not one"). Kept separate from main.ts's DOM
 // wiring (same split as screen.ts / route.ts / progressMap.ts / stats.ts)
 // so the inline-vs-takeover split, the queue order, and the
@@ -13,7 +13,7 @@
 //   2. Takeover Celebrations queue and play one at a time, in a fixed
 //      order, waiting for an explicit dismissal each time. A single
 //      Attempt can produce both a range-expansion AND a Milestone
-//      takeover simultaneously (CONTEXT.md), and the issue is explicit
+//      takeover simultaneously (GLOSSARY.md), and the issue is explicit
 //      that two takeovers back to back is correct, not a bug to smooth
 //      over, so nothing here ever collapses the set down to one.
 import { celebration, type Celebration, type CelebrationKind } from "./engine/engine";
@@ -35,7 +35,7 @@ function takeoverRank(kind: CelebrationKind): number {
 }
 
 // Inline Celebrations from a single Attempt, in no particular order.
-// CONTEXT.md's "plays over the practice screen without interrupting"
+// GLOSSARY.md's "plays over the practice screen without interrupting"
 // means simultaneous, not sequenced, so there's no ordering to impose.
 export function inlineCelebrations(celebrations: Celebration[]): Celebration[] {
   return celebrations.filter((c) => c.tag === "inline");

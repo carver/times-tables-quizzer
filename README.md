@@ -62,7 +62,7 @@ Sync (docs/adr/0006, opt-in from the Progress map's settings row) is a Firestore
 
 This project carries its reasoning in two places, and both exist because several decisions here look like bugs until you know why:
 
-- **[`CONTEXT.md`](CONTEXT.md)** is the glossary. Fact, Attempt, Fluency, Accuracy, Mastered, Active range, Streak, Celebration, Profile. Use these words; each entry lists the synonyms to avoid.
+- **[`GLOSSARY.md`](GLOSSARY.md)** is the glossary. Fact, Attempt, Fluency, Accuracy, Mastered, Active range, Streak, Celebration, Profile. Use these words; each entry lists the synonyms to avoid.
 - **[`docs/adr/`](docs/adr/)** holds the decisions worth defending:
   - Progression and celebration deliberately use *different* speed rules ([0001](docs/adr/0001-separate-progression-and-celebration-speed-rules.md))
   - A missed streak day is recovered by a chance roll, not a grace period ([0002](docs/adr/0002-probabilistic-streak-recovery.md))

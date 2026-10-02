@@ -20,7 +20,7 @@ describe("advanceHighWaterMark", () => {
   it("resets to the new masteredCount when the Active range size changes, a new frontier", () => {
     const previous: ProgressHighWaterMark = { activeRangeSize: 5, masteredCount: 23 };
 
-    // Expansion to 6x6 drops the mastered share instantly (CONTEXT.md).
+    // Expansion to 6x6 drops the mastered share instantly (GLOSSARY.md).
     // The new size's mark must not inherit the old size's high point.
     expect(advanceHighWaterMark(previous, 6, 3)).toEqual({ activeRangeSize: 6, masteredCount: 3 });
   });
@@ -82,7 +82,7 @@ describe("computeProgressMapStatus", () => {
     expect(beforeExpansion.readout).toEqual({ kind: "remaining", count: 0 });
 
     // The Active range just expanded to 6x6 (adding a row and column drops
-    // the mastered share instantly, per CONTEXT.md). The new size's high
+    // the mastered share instantly, per GLOSSARY.md). The new size's high
     // point starts fresh rather than inheriting the old size's zero.
     const freshSix = stateWithMasteredCount({ size: 6 }, 5); // 36 facts, needs 33
     const afterExpansion = computeProgressMapStatus(freshSix, 1, beforeExpansion.highWaterMark);

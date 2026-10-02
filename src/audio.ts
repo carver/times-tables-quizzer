@@ -1,4 +1,4 @@
-// WebAudio synthesis for ticket #13's five audio moments (CONTEXT.md /
+// WebAudio synthesis for ticket #13's five audio moments (GLOSSARY.md /
 // the issue's feedback-matrix table). Deliberately NOT unit-tested the
 // way celebrationQueue.ts is: there is no meaningful pure logic here to
 // assert on without a real AudioContext, and jsdom doesn't provide one.
@@ -18,7 +18,7 @@ let muted = false;
 // Browsers refuse to produce sound from an AudioContext that wasn't
 // created/resumed inside a user-gesture handler. main.ts calls this from
 // the Progress map's "Practice" tap (the landing flow's free gesture,
-// CONTEXT.md) and, defensively, from the very first pointerdown/keydown
+// GLOSSARY.md) and, defensively, from the very first pointerdown/keydown
 // anywhere, since a same-day return visit skips the map and lands
 // straight on the quiz (route.ts's decideLanding), where the first
 // keypad/keyboard press is the only gesture on offer instead.

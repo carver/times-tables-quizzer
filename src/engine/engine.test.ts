@@ -994,7 +994,7 @@ describe("submitAttempt", () => {
       // `random` always returns 1, guaranteeing the roll misses regardless
       // of missedDays, so lastStreakDay never advances to today. Days
       // practiced must still climb: it tracks practice, not Streak credit
-      // (CONTEXT.md's Streak is a different concept from "showed up").
+      // (GLOSSARY.md's Streak is a different concept from "showed up").
       const state: EngineState = {
         ...createInitialState({ size: 1 }, deps({ now: () => day(0) })),
         practiceDayCount: 3,

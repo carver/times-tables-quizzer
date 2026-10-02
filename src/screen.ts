@@ -23,7 +23,7 @@ export type AnsweringScreen = {
 // The first wrong Attempt just landed. The Fact stays up with its
 // answer still hidden, so the Learner gets a second swing at recalling
 // it rather than being handed the answer to copy. Like the correction
-// retype, this Retry is deliberately not an Attempt (CONTEXT.md):
+// retype, this Retry is deliberately not an Attempt (GLOSSARY.md):
 // nothing in this mode calls submitAttempt.
 export type RetryingScreen = {
   mode: "retrying";
@@ -37,7 +37,7 @@ export type RetryingScreen = {
 // answered incorrectly (captured before the engine advanced to a new
 // current Fact) and `correctAnswer` is what the Learner must retype
 // before continuing. This retype is deliberately not an Attempt
-// (CONTEXT.md): nothing in this mode calls submitAttempt.
+// (GLOSSARY.md): nothing in this mode calls submitAttempt.
 export type CorrectingScreen = {
   mode: "correcting";
   engine: EngineState;
@@ -76,7 +76,7 @@ function toAnswering(engine: EngineState, deps: Dependencies): AnsweringScreen {
 //
 // A no-op in "retrying" and "correcting" mode, where there is no Attempt
 // being timed. Neither a Retry nor the correction retype is one
-// (CONTEXT.md).
+// (GLOSSARY.md).
 export function restartFactTimer(screen: ScreenState, deps: Dependencies): ScreenState {
   if (screen.mode !== "answering") return screen;
   return { ...screen, factShownAt: deps.now() };
@@ -131,7 +131,7 @@ export function pressEnter(screen: ScreenState, deps: Dependencies): EnterResult
       // Out of tries: the answer comes out now, and the Learner retypes
       // it. Still no submitAttempt: the Fact's one measured Attempt was
       // the first Enter, and the Retry only decided how much help
-      // to give, not what gets recorded (CONTEXT.md).
+      // to give, not what gets recorded (GLOSSARY.md).
       const revealed: CorrectingScreen = { ...screen, mode: "correcting", typed: "" };
       return { screen: revealed, outcome: { kind: "retry-incorrect" } };
     }

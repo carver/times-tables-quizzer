@@ -261,7 +261,7 @@ body {
   font-weight: 600;
 }
 
-/* Progress map, the app's home screen (CONTEXT.md). One 12x12 grid
+/* Progress map, the app's home screen (GLOSSARY.md). One 12x12 grid
    outline with the conquered Active-range corner filled: deliberately
    the same grid shape ADR 0004 settles for the statistics pages, so the
    Learner learns it once. */
@@ -834,7 +834,7 @@ body {
 }
 
 /* Ticket #13's takeover: fills the screen and waits for a tap, for
-   range-expansion and Milestone Celebrations (CONTEXT.md's Celebration
+   range-expansion and Milestone Celebrations (GLOSSARY.md's Celebration
    entry). Fixed and outside the .screen/[data-active] system on purpose:
    it covers whichever screen was showing (always the quiz screen in
    practice) rather than being scoped to one, since main.ts blocks quiz

@@ -1,5 +1,5 @@
 // Pure computation behind the Progress map's progress-to-expansion
-// indicator (CONTEXT.md's Progress map entry), kept DOM-free like
+// indicator (GLOSSARY.md's Progress map entry), kept DOM-free like
 // screen.ts and route.ts so the monotonic high-water-mark behavior is
 // testable without a browser.
 import { isMastered, listFacts, MASTERY_THRESHOLD, MAX_ACTIVE_RANGE_SIZE, type EngineState } from "./engine/engine";

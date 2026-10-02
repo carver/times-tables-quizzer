@@ -20,7 +20,7 @@ import {
 // color by the same index regardless of which grid it's drawing.
 export type RampBucket = 0 | 1 | 2 | 3 | 4;
 
-// CONTEXT.md's Accuracy buckets (ticket #12), deliberately uneven: 100 /
+// GLOSSARY.md's Accuracy buckets (ticket #12), deliberately uneven: 100 /
 // 90-99 / 75-90 / 50-75 / <50, spread where the data actually lives
 // since Accuracy clusters near 100%. `correctShare === 1` is an exact
 // equality check on purpose: the EMA (RECENCY_WEIGHT < 1, see engine.ts)
@@ -37,7 +37,7 @@ export function accuracyBucket(correctShare: number): RampBucket {
 }
 
 // A Fact's own target: the fixed progression bar (ADR 0001) plus its
-// personal typing allowance (CONTEXT.md), the same target isMastered
+// personal typing allowance (GLOSSARY.md), the same target isMastered
 // compares against, so fluencyRatio's 1.0 boundary lines up exactly with
 // the Mastered line (ticket #12's central requirement).
 // currentFluencyMs / target uses the DECAYED value, so the Fluency grid can

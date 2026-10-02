@@ -48,7 +48,7 @@ export async function getLastActivityDay(): Promise<DayKey | null> {
 
 // The reminder's entire decision rule: remind unless today's practice has
 // already happened. Kept pure and separate from the IndexedDB plumbing
-// above so it's testable without a browser. Mirrors CONTEXT.md's split
+// above so it's testable without a browser. Mirrors GLOSSARY.md's split
 // between engine logic and I/O, one level up from the engine itself.
 export function shouldRemind(lastActivityDay: DayKey | null, now: number): boolean {
   return lastActivityDay !== dayKey(now);

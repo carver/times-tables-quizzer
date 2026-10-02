@@ -195,7 +195,7 @@ describe("pressEnter", () => {
     // Cleared, so the Retry's digits aren't sitting there to be
     // mistaken for progress on the retype.
     expect(correcting.typed).toBe("");
-    // The Retry is practice, not measurement (CONTEXT.md). The
+    // The Retry is practice, not measurement (GLOSSARY.md). The
     // engine saw exactly one wrong Attempt, back at the first Enter.
     expect(next.engine).toBe(retrying.engine);
   });
