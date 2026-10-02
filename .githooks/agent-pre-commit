@@ -1,0 +1,12 @@
+#!/bin/sh
+# What CI runs, on what's staged: unit tests, the e2e suite, then the
+# pre-commit hook's type check. bin/agent-commit-gate (llm-toolbox) runs it
+# before an agent's `git commit`; run it by hand with `agent-commit-gate --run`.
+set -e
+hooks=$(cd "$(dirname "$0")" && pwd)
+. "$hooks/snapshot.sh"
+npm run -s test
+# A failed run would otherwise park on the HTML report's server.
+PLAYWRIGHT_HTML_OPEN=never npm run -s test:e2e
+cd "$repo"
+"$hooks/pre-commit"

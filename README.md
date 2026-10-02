@@ -8,6 +8,7 @@ A multiplication practice app for one nine-year-old. It drills multiplication fa
 
 ```bash
 npm install
+git config core.hooksPath .githooks
 npm run dev
 ```
 
@@ -22,6 +23,8 @@ Local to the browser by default: no backend, no login. Progress lives in `localS
 | `npm run test:rules` | Firestore security rules + cloudSync, against the local Firebase emulator |
 | `npm run test:e2e` | browser tests (Playwright, builds first; runs under the Firebase emulator like `test:rules`) |
 | `npm run test:all` | all three suites |
+
+The `pre-commit` hook in `.githooks/` type-checks what's staged. `.githooks/agent-pre-commit` runs what CI runs (unit tests, e2e, type check) on what's staged; `agent-commit-gate` (llm-toolbox) runs it before an agent's commit, or run it by hand.
 
 ### Working on cross-device sync
 

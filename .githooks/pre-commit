@@ -1,0 +1,12 @@
+#!/bin/sh
+# Type-check what's staged (`npm run typecheck`, both tsconfigs at once and
+# incremental), in two to three seconds. Enabled by
+# `git config core.hooksPath .githooks` (README, "Running it").
+# The test suites are too slow for this; agent-pre-commit runs them.
+set -e
+. "$(dirname "$0")/snapshot.sh"
+tsc() { node_modules/.bin/tsc --noEmit --incremental --tsBuildInfoFile "$git_dir/tsc-$1.tsbuildinfo" -p "$2"; }
+tsc app tsconfig.json &
+app=$!
+tsc sw tsconfig.sw.json
+wait "$app"
