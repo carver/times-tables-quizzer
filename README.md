@@ -24,7 +24,7 @@ Local to the browser by default: no backend, no login. Progress lives in `localS
 | `npm run test:e2e` | browser tests (Playwright, builds first; runs under the Firebase emulator like `test:rules`) |
 | `npm run test:all` | all three suites |
 
-The `pre-commit` hook in `.githooks/` type-checks what's staged. `.githooks/agent-pre-commit` runs what CI runs (unit tests, e2e, type check) on what's staged; `agent-commit-gate` (llm-toolbox) runs it before an agent's commit, or run it by hand.
+The `pre-commit` hook in `.githooks/` type-checks what's staged. `.githooks/agent-pre-commit` runs what CI runs (unit tests, e2e, type check) on what's staged; the `pre-commit` hook runs it first for an agent's commit, or run it by hand.
 
 ### Working on cross-device sync
 
